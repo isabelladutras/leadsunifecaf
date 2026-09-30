@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Quem acessa:
+// - a administradora (e-mail abaixo) sempre acessa e é a única que muda a equipe;
+// - as vendedoras ativas cadastradas na aba Equipe do site acessam os leads.
+// Ao contratar alguém, basta adicioná-la na aba Equipe e criar o login dela em Authentication.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function logada() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+    function email() {
+      return request.auth.token.email.lower();
+    }
+    function ehAdmin() {
+      return logada() && email() in ['email-da-isabella@exemplo.com'];
+    }
+    function daEquipe() {
+      return logada() && (
+        ehAdmin() ||
+        (exists(/databases/$(database)/documents/config/equipe) &&
+         email() in get(/databases/$(database)/documents/config/equipe).data.get('emails', []))
+      );
+    }
+
+    match /leads/{id} {
+      allow read, write: if daEquipe();
+    }
+
+    match /config/{doc} {
+      allow read: if daEquipe();
+      allow write: if (doc != 'equipe' && daEquipe()) || ehAdmin();
+    }
+  }
+}
