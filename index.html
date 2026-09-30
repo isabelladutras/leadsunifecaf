@@ -14,6 +14,7 @@
   --accent:#12745A; --accent-ink:#FFFFFF; --accent-soft:#DDF0E8;
   --late:#B3261E; --late-soft:#FBE3E1; --today:#9A5B00; --today-soft:#FDF0D8; --calm:#3B5B8C; --calm-soft:#E3EAF6;
   --p0:#7A3E9D; --p1:#B04A2E; --p2:#1F6FA8; --p3:#8A6A00; --p4:#A8326E; --p5:#2E7D6B;
+  --gold:#A87400; --gold-soft:#FBEFD2; --silver:#5E6B75; --silver-soft:#E9EDF0; --bronze:#9A5530; --bronze-soft:#F6E4D8;
   --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
   --f-body:"Figtree",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
   --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -23,12 +24,14 @@
   --accent:#3BBF93; --accent-ink:#06231A; --accent-soft:#16372D;
   --late:#FF8A80; --late-soft:#3B1D1B; --today:#F2B84B; --today-soft:#3A2C12; --calm:#9DB8E6; --calm-soft:#1E2A3D;
   --p0:#C9A2E6; --p1:#F2A38C; --p2:#8CC3F0; --p3:#E6C766; --p4:#F0A0C8; --p5:#86D6BF;
+  --gold:#F2C45A; --gold-soft:#3A2F14; --silver:#C3CDD5; --silver-soft:#262E33; --bronze:#E3A37C; --bronze-soft:#3A2519;
   color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0F1614; --surface:#172220; --ink:#E6EEEB; --muted:#98A8A2; --line:#2A3834;
   --accent:#3BBF93; --accent-ink:#06231A; --accent-soft:#16372D;
   --late:#FF8A80; --late-soft:#3B1D1B; --today:#F2B84B; --today-soft:#3A2C12; --calm:#9DB8E6; --calm-soft:#1E2A3D;
   --p0:#C9A2E6; --p1:#F2A38C; --p2:#8CC3F0; --p3:#E6C766; --p4:#F0A0C8; --p5:#86D6BF;
+  --gold:#F2C45A; --gold-soft:#3A2F14; --silver:#C3CDD5; --silver-soft:#262E33; --bronze:#E3A37C; --bronze-soft:#3A2519;
   color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -120,6 +123,16 @@ tr.total td{font-weight:700;border-bottom:none}
 .bar .fill{height:100%;background:var(--calm);border-radius:5px}
 .bar .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 .note{font-size:.8rem;color:var(--muted);margin:0}
+.podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:560px){.podium{grid-template-columns:1fr}}
+.pcard{border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;background:var(--ps);border:1px solid transparent;min-width:0}
+.pcard .pos{font-family:var(--f-display);font-weight:700;font-size:.95rem;color:var(--pc)}
+.pcard .big{font-family:var(--f-display);font-weight:700;font-size:2.2rem;line-height:1;font-variant-numeric:tabular-nums}
+.pcard .lbl{font-size:.8rem;color:var(--muted)}
+.pcard.p1{--ps:var(--gold-soft);--pc:var(--gold)} .pcard.p2{--ps:var(--silver-soft);--pc:var(--silver)} .pcard.p3{--ps:var(--bronze-soft);--pc:var(--bronze)}
+tr.eu td{background:var(--accent-soft)}
+.mini{display:inline-block;width:64px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;vertical-align:middle;margin-left:6px}
+.mini i{display:block;height:100%;background:var(--accent)}
 .metastrip{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .metastrip .l1{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:.9rem;font-variant-numeric:tabular-nums}
 .metastrip .track{height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
@@ -195,7 +208,8 @@ input[type=file]{font-size:.88rem;max-width:100%}
   <div class="chips" id="chips"></div>
 
   <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-tab="hoje" aria-selected="true">Chamar hoje<span class="n" id="nHoje"></span></button>
+    <button class="tab" role="tab" data-tab="inicio" aria-selected="true">Início</button>
+    <button class="tab" role="tab" data-tab="hoje" aria-selected="false">Chamar hoje<span class="n" id="nHoje"></span></button>
     <button class="tab" role="tab" data-tab="semdona" aria-selected="false">Sem vendedora<span class="n" id="nPool"></span></button>
     <button class="tab" role="tab" data-tab="agenda" aria-selected="false">Agenda<span class="n" id="nAgenda"></span></button>
     <button class="tab" role="tab" data-tab="pos" aria-selected="false">Pós-matrícula<span class="n" id="nPos"></span></button>
@@ -212,6 +226,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
     <select id="filtroOrigem" style="width:auto"></select>
   </div>
 
+  <div id="inicio" class="list"></div>
   <div id="list" class="list"></div>
   <div id="campanha" class="list" hidden>
     <section class="panel">
@@ -282,7 +297,7 @@ let db = null, leads = [], tpl = {...DEFAULT_TPL}, equipe = ["Isabella"], rematJ
 let dupOk = false, impText = "", impParsed = null, importing = false;
 const CAMP_DEFAULT = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Abrimos uma condição especial de matrícula para o curso de {curso} e lembrei de você. Quer que eu te passe os detalhes?";
 const campSit = new Set(["perdido","frio"]), campMot = new Set();
-let tab = "hoje", resp = "todas", busca = "", filtroEtapa = "", filtroOrigem = "", periodo = "mes";
+let tab = "inicio", resp = "todas", busca = "", filtroEtapa = "", filtroOrigem = "", periodo = "mes";
 const drafts = new Map(), confirmDel = new Set(), pendingStage = new Map(), pendingDate = new Set(), pendingEdit = new Set();
 let pendingRender = false;
 try{ resp = localStorage.getItem("resp") || "todas"; }catch(e){}
@@ -545,10 +560,11 @@ function render(){
   document.getElementById("nTodos").textContent = mine().length||"";
 
   const list = document.getElementById("list"), num = document.getElementById("numeros"), cfg = document.getElementById("config"), camp = document.getElementById("campanha");
-  list.hidden = ["config","numeros","campanhas","equipe"].includes(tab); document.getElementById("equipeBox").hidden = tab!=="equipe"; num.hidden = tab!=="numeros"; cfg.hidden = tab!=="config"; camp.hidden = tab!=="campanhas";
+  list.hidden = ["config","numeros","campanhas","equipe","inicio"].includes(tab); document.getElementById("inicio").hidden = tab!=="inicio"; document.getElementById("equipeBox").hidden = tab!=="equipe"; num.hidden = tab!=="numeros"; cfg.hidden = tab!=="config"; camp.hidden = tab!=="campanhas";
   document.getElementById("filtros").hidden = tab!=="todos";
   if(tab==="config"){ renderConfig(); return; }
   if(tab==="campanhas"){ renderCampList(); return; }
+  if(tab==="inicio"){ renderInicio(); return; }
   if(tab==="equipe"){ renderEquipe(); return; }
   if(tab==="numeros"){ renderNumeros(); return; }
   if(!db){ list.innerHTML = emptyHTML("Conectando…","Carregando os leads da equipe."); return; }
@@ -581,6 +597,58 @@ function render(){
     list.innerHTML = all.length ? all.map(cardHTML).join("") : emptyHTML("Nenhum lead encontrado","Ajuste a busca ou os filtros.");
   }
 }
+
+/* ---------- início / ranking ---------- */
+let rankPer = "mes";
+const RANK_PER = {hoje:"Hoje", semana:"Esta semana", mes:"Este mês"};
+function rankRange(){ const t = today();
+  if(rankPer==="hoje") return [t,t];
+  if(rankPer==="semana"){ const dow = (parse(t).getDay()+6)%7; return [addDays(t,-dow), t]; }
+  return [mesKey()+"-01", t]; }
+const ATEND = /enviad|respondeu|retomado/;
+function renderInicio(){
+  const el = document.getElementById("inicio"); const [ini,fim] = rankRange(); const t = today();
+  const inP = s => s && String(s).slice(0,10)>=ini && String(s).slice(0,10)<=fim;
+  const mm = metas[mesKey()] || {}; const eu = meuNome();
+  const rows = equipe.map(n=>{
+    let atend = 0, pegos = 0;
+    for(const l of leads) for(const h of (l.historico||[])) if(h.por===n && inP(h.data)){ if(ATEND.test(h.acao)) atend++; if(/ficou com/.test(h.acao)) pegos++; }
+    const mine_ = leads.filter(l=>l.responsavel===n);
+    return {n, atend, pegos,
+      mats: mine_.filter(l=>inP(l.matriculadoEm)).length,
+      matsMes: mine_.filter(l=>String(l.matriculadoEm||"").slice(0,7)===mesKey()).length,
+      meta: Number(mm[n]) || META_PADRAO,
+      carteira: mine_.filter(l=>!["perdido","naoquer","matriculado"].includes(l.etapa)).length,
+      atras: mine_.filter(l=>l.proximo && l.proximo<t).length};
+  }).sort((a,b)=>b.mats-a.mats || b.atend-a.atend || a.n.localeCompare(b.n));
+  const totM = rows.reduce((a,r)=>a+r.mats,0), totA = rows.reduce((a,r)=>a+r.atend,0);
+  const metaEq = rows.reduce((a,r)=>a+r.meta,0), matsEq = rows.reduce((a,r)=>a+r.matsMes,0);
+  const top = rows.slice(0,3);
+  el.innerHTML = `
+    <div class="row" style="justify-content:space-between">
+      <h3 class="sec">Ranking · ${RANK_PER[rankPer]}</h3>
+      <div class="chips">${Object.entries(RANK_PER).map(([k,v])=>`<button type="button" class="chip" data-rper="${k}" aria-pressed="${k===rankPer}">${v}</button>`).join("")}</div>
+    </div>
+    <p class="note">Equipe: <b>${totM}</b> matrícula(s) e <b>${totA}</b> atendimento(s) ${rankPer==="hoje"?"hoje":rankPer==="semana"?"nesta semana":"neste mês"} · meta do mês ${matsEq} de ${metaEq} (${pct(matsEq,metaEq)})</p>
+    ${!db ? emptyHTML("Conectando…","") : `<div class="podium">${top.map((r,i)=>`
+      <div class="pcard p${i+1}">
+        <span class="pos">${i+1}º lugar</span>
+        <span class="pill owner" style="--c:var(--p${ownerColor(r.n)});align-self:flex-start">${esc(r.n)}</span>
+        <span class="big">${r.mats}</span><span class="lbl">matrícula(s)</span>
+        <span class="lbl">${r.atend} atendimento(s) · ${r.pegos} lead(s) conquistado(s)</span>
+      </div>`).join("")}</div>
+    <section class="panel">
+      <div class="tblwrap"><table>
+        <thead><tr><th>#</th><th>Vendedora</th><th>Matrículas</th><th>Atendimentos</th><th>Leads conquistados</th><th>Meta do mês</th><th>Carteira ativa</th><th>Atrasados</th></tr></thead>
+        <tbody>${rows.map((r,i)=>`<tr class="${r.n===eu?"eu":""}"><td>${i+1}º</td><td><span class="pill owner" style="--c:var(--p${ownerColor(r.n)})">${esc(r.n)}</span></td>
+          <td><b>${r.mats}</b></td><td>${r.atend}</td><td>${r.pegos}</td>
+          <td>${r.matsMes}/${r.meta}<span class="mini"><i style="width:${Math.min(100,Math.round(r.matsMes*100/r.meta))}%"></i></span></td>
+          <td>${r.carteira}</td><td>${r.atras ? `<span style="color:var(--late);font-weight:600">${r.atras}</span>` : "0"}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <p class="note">Ordem: matrículas no período; empate decide por atendimentos. Atendimentos são mensagens marcadas como enviadas e respostas registradas no sistema. Leads conquistados são os que ela pegou na aba Sem vendedora.</p>
+    </section>`}`;
+}
+document.getElementById("inicio").addEventListener("click", e=>{ const b = e.target.closest("[data-rper]"); if(b){ rankPer = b.dataset.rper; renderInicio(); } });
 
 /* ---------- números ---------- */
 function periodRange(){
