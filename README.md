@@ -7,6 +7,7 @@ Painel de follow-up de leads e pós-matrícula do polo. Site estático (GitHub P
 - `index.html` — o painel inteiro.
 - `config.js` — configuração do Firebase e e-mail da administradora.
 - `firestore.rules` — quem pode ler e alterar os dados. Cópia de referência: a regra que vale é a publicada no Firebase.
+- `manifest.webmanifest`, `sw.js`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` — permitem instalar o painel como aplicativo no celular.
 
 ## Configuração (uma vez)
 
@@ -20,5 +21,7 @@ Painel de follow-up de leads e pós-matrícula do polo. Site estático (GitHub P
 ## Dia a dia
 
 - Nova vendedora: adicione na aba **Equipe** do site (nome + e-mail). No primeiro acesso ela clica em **Primeiro acesso: criar minha senha** com esse e-mail.
+- Time de Permanência: adicione na aba **Equipe** com a função **Permanência**. Ela só vê a aba Pós-matrícula (alunos matriculados, em risco primeiro).
+- Backup: todo mês o Início avisa; clique em **Baixar backup agora** e guarde a planilha.
 - Alguém saiu: clique em **Desativar** na aba Equipe. Os leads dela passam para outra vendedora e o acesso é cortado na hora.
 - A configuração do Firebase no `config.js` não é segredo; quem protege os dados são as regras.

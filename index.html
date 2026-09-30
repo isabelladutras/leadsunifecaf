@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#12745A">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Leads UniFECAF">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Leads Polo UniFECAF</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
@@ -110,6 +118,9 @@ textarea{resize:vertical;min-height:84px}
 .pill.muted{color:var(--muted)}
 .info{font-size:.85rem;background:var(--bg);border-radius:8px;padding:8px 10px;overflow-wrap:anywhere;display:flex;flex-direction:column;gap:2px}
 .info b{font-weight:600}
+.ctx{background:var(--today-soft);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:.88rem;display:flex;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+.ctx b{color:var(--today)}
+.rot{font-size:.88rem;line-height:1.55;background:var(--calm-soft);border-radius:8px;padding:8px 10px;color:var(--ink)}
 .steps{display:flex;gap:4px;flex-wrap:wrap}
 .step{font-size:.72rem;padding:2px 8px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
 .step.done{background:var(--accent-soft);color:var(--accent);border-color:transparent}
@@ -145,6 +156,8 @@ tr.total td{font-weight:700;border-bottom:none}
 .pcard .lbl{font-size:.8rem;color:var(--muted)}
 .pcard.p1{--ps:var(--gold-soft);--pc:var(--gold)} .pcard.p2{--ps:var(--silver-soft);--pc:var(--silver)} .pcard.p3{--ps:var(--bronze-soft);--pc:var(--bronze)}
 tr.eu td{background:var(--accent-soft)}
+table.rank th:nth-child(2),table.rank td:nth-child(2){text-align:left}
+table.rank td:first-child{font-weight:700;color:var(--muted)}
 .mini{display:inline-block;width:64px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;vertical-align:middle;margin-left:6px}
 .mini i{display:block;height:100%;background:var(--accent)}
 .metastrip{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
@@ -200,6 +213,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
       <label class="f">Curso de interesse<input type="text" id="fCurso" placeholder="Ex.: Administração" autocomplete="off"></label>
       <label class="f">Vendedora<select id="fResp"></select></label>
       <label class="f">Origem<select id="fOrigem"></select></label>
+      <label class="f">Indicado por (aluno)<input type="text" id="fInd" list="alunosList" autocomplete="off" placeholder="Nome de quem indicou"></label>
       <label class="f">Situação<select id="fEtapa"></select></label>
     </div>
     <div class="grid2" id="fExtras"></div>
@@ -265,6 +279,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
   <div id="equipeBox" class="list" hidden></div>
   <div id="config" class="list" hidden></div>
 </div>
+<datalist id="alunosList"></datalist>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -272,6 +287,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="config.js"></script>
+<script>if("serviceWorker" in navigator){ window.addEventListener("load", ()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }</script>
 <script>
 /* ---------- regras ---------- */
 const MAX_TENT = 3, RETRY_DIAS = 2, META_PADRAO = 30;
@@ -285,6 +301,8 @@ const STAGES = {
   perdido:     {label:"Perdido",               dias:null, motivo:true,    hint:"sai da fila"},
   naoquer:     {label:"Não quer contato",      dias:null, motivo:true,    hint:"nunca mais entra na fila"}
 };
+const OBJECOES = [["preco","Preço / valor"],["horario","Horário / falta de tempo"],["familia","Vai decidir com a família"],["curso","Dúvida sobre o curso ou diploma"],["documentos","Documentação / processo"],["sumiu","Sumiu sem dar motivo"],["naorespondeu","Não respondeu"]];
+const objLabel = k => (OBJECOES.find(o=>o[0]===k)||[,""])[1];
 const ORIGENS = ["Instagram","WhatsApp direto","Indicação","Site / Google","Panfleto / evento","Passou no polo","Outro"];
 const MOTIVOS = ["Preço","Horário / falta de tempo","Desistiu de estudar agora","Foi para outra faculdade","Nunca respondeu","Outro"];
 const POS = [
@@ -300,6 +318,21 @@ const DEFAULT_TPL = {
   negociando: "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se tiver qualquer dúvida sobre valores ou aulas, me fala que eu te ajudo.",
   agendado: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Você tinha me pedido para te chamar agora, {motivo}. Ainda faz sentido conversarmos sobre o curso de {curso}?",
   frio: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Conversamos há um tempo sobre o curso de {curso}. Surgiram condições novas de matrícula, quer que eu te passe?",
+  obj_preco: "Oi, {nome}! Fiquei pensando no que você falou sobre o valor. Consegui ver uma condição de parcelamento para o curso de {curso} que pode caber melhor. Posso te mandar um áudio rapidinho explicando?",
+  obj_horario: "Oi, {nome}! Lembrei que o seu receio era o tempo. No semipresencial você organiza os estudos no seu ritmo e os encontros no polo são poucos. Quer que eu te mostre como fica a rotina?",
+  obj_familia: "Oi, {nome}! Conseguiu conversar em casa sobre a faculdade? Se ajudar, posso te mandar um resumo com valores e duração do curso de {curso} para você mostrar para eles.",
+  obj_curso: "Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?",
+  obj_documentos: "Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?",
+  obj_sumiu: "Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?",
+  obj_naorespondeu: "Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?",
+  rot_novo: "• Se apresente: seu nome e que você é do polo UniFECAF\n• Pergunte o que fez a pessoa procurar a faculdade agora (trabalho, promoção, sonho)\n• Confirme o curso de interesse e se já concluiu o ensino médio\n• Explique o formato do curso em uma frase\n• Termine com uma pergunta: \"posso te mandar os valores e a condição deste mês?\"",
+  rot_preco: "• Valide: \"entendo, é um investimento importante\"\n• Traga o valor para o dia a dia (quanto dá por dia)\n• Apresente o parcelamento e a condição vigente, se houver\n• Lembre o retorno: o que o diploma muda no salário ou na carreira dela\n• Feche com escolha: \"prefere começar com a condição A ou B?\"",
+  rot_horario: "• Pergunte como é a rotina dela hoje (trabalho, filhos)\n• Explique como funcionam as aulas e os encontros no polo\n• Dê um exemplo real de aluna com rotina parecida que está conseguindo\n• Sugira quanto tempo por dia ela precisaria reservar\n• Pergunte: \"com isso, cabe na sua rotina?\"",
+  rot_familia: "• Pergunte quem mais participa da decisão\n• Ofereça mandar um resumo simples (curso, duração, valor) para mostrar em casa\n• Se fizer sentido, ofereça falar direto com a pessoa da família\n• Combine um dia para retornar: \"posso te chamar na quinta para ver o que decidiram?\"",
+  rot_curso: "• Pergunte qual é exatamente a dúvida (grade, diploma, mercado)\n• Reforce que o diploma é reconhecido pelo MEC e tem a mesma validade\n• Fale de 2 ou 3 disciplinas ou áreas de atuação do curso\n• Se tiver, cite um ex-aluno trabalhando na área\n• Pergunte: \"isso responde o que você queria saber?\"",
+  rot_documentos: "• Mande a lista de documentos do curso\n• Explique que o envio é por foto, aqui mesmo\n• Ofereça ajuda com o que estiver faltando\n• Combine um prazo: \"consegue me mandar até amanhã?\"",
+  rot_sumiu: "• Áudio curto (menos de 30 segundos), tom leve, sem cobrança\n• Lembre em uma frase o que vocês conversaram\n• Traga uma novidade (condição, prazo de início das aulas)\n• Pergunte se ainda faz sentido ou se prefere retomar mais para frente",
+  rot_naorespondeu: "• Áudio de até 1 minuto resumindo o principal: curso, formato e valor\n• Uma pergunta simples no final, de sim ou não\n• Evite mandar muitas mensagens seguidas",
   pos_d7: "Oi, {nome}! Já faz uma semana da sua matrícula no curso de {curso}. Está tudo certo com o acesso ao portal e às aulas? Qualquer dúvida, é só me chamar aqui.",
   pos_boleto: "Oi, {nome}! Passando para lembrar que o seu primeiro boleto vence em {vencimento}. Se precisar da 2ª via ou tiver alguma dúvida, é só me chamar aqui.",
   pos_d30: "Oi, {nome}! Já completou um mês de aulas. Como está sendo o curso de {curso}? Está conseguindo acompanhar as aulas e o portal?",
@@ -308,6 +341,8 @@ const DEFAULT_TPL = {
 };
 const TPL_GROUPS = [
   {title:"Leads", keys:[["novo","Novo – sem resposta"],["informado","Recebeu informações"],["negociando","Em conversa"],["agendado","Pediu contato em data"],["frio","Frio – reativar"]]},
+  {title:"Follow-up pelo que travou (substitui a mensagem de Recebeu informações, Em conversa e Frio)", keys:OBJECOES.map(([k,t])=>["obj_"+k, t])},
+  {title:"Roteiros de áudio (tópicos do que falar)", keys:[["rot_novo","Primeiro áudio (lead novo)"], ...OBJECOES.map(([k,t])=>["rot_"+k, t])]},
   {title:"Pós-matrícula", keys:[["pos_d7","Boas-vindas (7 dias após a matrícula)"],["pos_boleto","1º boleto (3 dias antes do vencimento)"],["pos_d30","Primeiro mês (30 dias)"],["pos_d60","Pedido de indicação (60 dias)"],["pos_remat","Antes da rematrícula (10 dias antes da janela)"]]}
 ];
 
@@ -317,6 +352,7 @@ const CAMP_DEFAULT = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo Uni
 const campSit = new Set(["perdido","frio"]), campMot = new Set();
 let agMes = "", agDia = "";
 let tab = "inicio", resp = "todas", busca = "", filtroEtapa = "", filtroOrigem = "", periodo = "mes";
+const pendingPegar = new Set(), pendingCtxOnly = new Set();
 const drafts = new Map(), confirmDel = new Set(), pendingStage = new Map(), pendingDate = new Set(), pendingEdit = new Set();
 let pendingRender = false;
 try{ resp = localStorage.getItem("resp") || "todas"; }catch(e){}
@@ -352,6 +388,11 @@ const num1 = v => (Math.round(v*10)/10).toString().replace(".",",");
 const pct = (a,b) => b ? Math.round(a*100/b)+"%" : "–";
 function toast(msg){ const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(()=>t.hidden=true, 2800); }
 const mine = () => leads.filter(l => resp==="todas" || l.responsavel===resp);
+const matDate = l => String(l.dataMatricula || l.matriculadoEm || "").slice(0,10);
+function alunoId(nome){ const n = norm(nome); if(!n) return null; const a = leads.find(l=>l.etapa==="matriculado" && norm(l.nome)===n); return a ? a.id : null; }
+function atualizarAlunosList(){ const dl = document.getElementById("alunosList"); if(!dl) return;
+  const nomes = [...new Set(leads.filter(l=>l.etapa==="matriculado").map(l=>l.nome))].sort();
+  const html = nomes.map(n=>`<option value="${esc(n)}">`).join(""); if(dl.innerHTML!==html) dl.innerHTML = html; }
 const isPool = l => !l.responsavel && !["perdido","naoquer","matriculado"].includes(l.etapa);
 function meuNome(){
   const m = (typeof membrosAtuais==="function" ? membrosAtuais() : []).filter(x=>x.ativa!==false);
@@ -395,15 +436,23 @@ function nextPos(l){
 }
 
 /* ---------- mensagens ---------- */
-function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual || null; const s = STAGES[l.etapa]; return s && s.tpl || null; }
+function rotKey(l){
+  if(["matriculado","perdido","naoquer"].includes(l.etapa)) return null;
+  if(l.objecao && tpl["rot_"+l.objecao]) return "rot_"+l.objecao;
+  if(["novo","informado"].includes(l.etapa) && tpl.rot_novo) return "rot_novo";
+  return null;
+}
+function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual || null;
+  if(["informado","negociando","frio"].includes(l.etapa) && l.objecao && tpl["obj_"+l.objecao]) return "obj_"+l.objecao; const s = STAGES[l.etapa]; return s && s.tpl || null; }
 function fillTpl(l){
   const k = tplKey(l); const t = k ? (tpl[k] || "") : "";
   const f = firstDue(l);
   return t.replaceAll("{nome}", firstName(l.nome))
           .replaceAll("{curso}", l.curso || "graduação")
-          .replaceAll("{responsavel}", l.responsavel || "equipe")
+          .replaceAll("{responsavel}", firstName(l.responsavel || meuNome()) || "equipe")
           .replaceAll("{motivo}", l.pedidoMotivo || "para retomarmos a conversa sobre a matrícula")
-          .replaceAll("{vencimento}", f ? br(f) : "breve");
+          .replaceAll("{vencimento}", f ? br(f) : "breve")
+          .replaceAll("{resumo}", l.resumo || "");
 }
 const waLink = (l, text) => `https://wa.me/${phoneDigits(l.telefone)}?text=${encodeURIComponent(text)}`;
 
@@ -423,9 +472,11 @@ function status(l){
 function stageData(l, st, x){
   const s = STAGES[st], t = today(), d = {etapa:st, tentativas:0};
   if(st==="matriculado"){
-    Object.assign(d, {dataMatricula:x.dataMatricula, diaVencimento:x.diaVencimento, matriculadoEm:l.matriculadoEm || t,
+    Object.assign(d, {dataMatricula:x.dataMatricula, diaVencimento:x.diaVencimento, matriculadoEm:x.dataMatricula || l.matriculadoEm || t,
       posFeitos:[], posSemResposta:0, risco:false, riscoAvisado:null});
     const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date;
+  } else if(st==="negociando" && x && x.objecao){
+    Object.assign(d, {objecao:x.objecao, resumo:x.resumo, resumoEm:t, resumoPor:meuNome()||userEmail, proximo:addDays(t, s.dias)});
   } else if(st==="agendado"){
     Object.assign(d, {pedidoData:x.pedidoData, pedidoMotivo:x.pedidoMotivo || "", proximo:x.pedidoData});
   } else if(s.motivo){
@@ -438,6 +489,7 @@ function stageHist(st, x){
   if(st==="agendado") return `pediu contato em ${brAno(x.pedidoData)}${x.pedidoMotivo?` (${x.pedidoMotivo})`:""}`;
   if(st==="matriculado") return `matriculado em ${br(x.dataMatricula)}, boleto vence dia ${x.diaVencimento}`;
   if(s.motivo) return `${s.label}: ${x.motivoPerda}`;
+  if(st==="negociando" && x && x.objecao) return `Em conversa · travou: ${objLabel(x.objecao)} · "${x.resumo}"`;
   return `mudou para ${s.label}`;
 }
 function extrasFields(st, prefix, l){
@@ -445,6 +497,9 @@ function extrasFields(st, prefix, l){
   if(st==="matriculado") return `
     <label class="f">Data da matrícula*<input type="date" id="${prefix}mat" value="${esc(l && l.dataMatricula || t)}"></label>
     <label class="f">Dia de vencimento do boleto*<input type="number" min="1" max="31" id="${prefix}venc" placeholder="Ex.: 10" value="${esc(l && l.diaVencimento || "")}"></label>`;
+  if(st==="negociando") return `
+    <label class="f">O que travou?*<select id="${prefix}obj"><option value="">Escolha…</option>${OBJECOES.map(([k,t])=>`<option value="${k}"${l && l.objecao===k ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+    <label class="f">Resumo da conversa* <span style="font-weight:400">(opcional se não respondeu)</span><input type="text" id="${prefix}res" maxlength="200" placeholder="Ex.: achou caro, pediu para ver parcelamento" value="${esc(l && l.resumo || "")}"></label>`;
   if(st==="agendado") return `
     <label class="f">Chamar em*<input type="date" id="${prefix}ped" min="${t}"></label>
     <label class="f">Motivo do pedido<input type="text" id="${prefix}pmot" placeholder="Ex.: para ver a matrícula de fevereiro"></label>`;
@@ -457,11 +512,14 @@ function readExtras(st, prefix){
   if(st==="matriculado"){ const venc = Number(v("venc")); const mat = v("mat");
     if(!mat) return {err:"Informe a data da matrícula"}; if(!(venc>=1 && venc<=31)) return {err:"Informe o dia de vencimento (1 a 31)"};
     return {dataMatricula:mat, diaVencimento:venc}; }
+  if(st==="negociando"){ const o = v("obj"), r = v("res");
+    if(!o) return {err:"Escolha o que travou"}; if(o!=="naorespondeu" && r.length < 5) return {err:"Escreva um resumo curto da conversa"};
+    return {objecao:o, resumo:r}; }
   if(st==="agendado"){ const p = v("ped"); if(!p || p<today()) return {err:"Escolha hoje ou uma data futura"}; return {pedidoData:p, pedidoMotivo:v("pmot")}; }
   if(STAGES[st].motivo){ const m = v("mot"); if(!m) return {err:"Escolha o motivo"}; return {motivoPerda:m}; }
   return {};
 }
-const needsExtras = st => st==="matriculado" || st==="agendado" || !!STAGES[st].motivo;
+const needsExtras = st => st==="negociando" || st==="matriculado" || st==="agendado" || !!STAGES[st].motivo;
 
 /* ---------- render ---------- */
 function renderChips(){
@@ -475,12 +533,14 @@ function renderChips(){
 
 function cardHTML(l){
   const id = esc(l.id); const st = status(l); const stage = STAGES[l.etapa] || STAGES.novo;
-  const key = tplKey(l); const canMsg = !!key && l.etapa!=="naoquer";
+  const key = tplKey(l); const canMsg = !!key && l.etapa!=="naoquer" && !isPerm();
   const text = drafts.has(l.id) ? drafts.get(l.id) : fillTpl(l);
   const hist = (l.historico||[]).slice(-4).reverse();
   const pills = [l.responsavel ? `<span class="pill owner" style="--c:var(--p${ownerColor(l.responsavel)})">${esc(l.responsavel)}</span>` : `<span class="pill muted">Sem vendedora</span>`,
     `<span class="pill stage">${esc(stage.label)}</span>`];
   if(l.risco) pills.push(`<span class="pill risk">${l.riscoAvisado ? "Em risco · Permanência avisada" : "Em risco · avisar Permanência"}</span>`);
+  if(isPool(l) && l.filaDe) pills.push(`<span class="pill owner" style="--c:var(--p${ownerColor(l.filaDe)})">Fila: ${esc(l.filaDe)}</span>`);
+  if(isPool(l) && l.chamandoEm===today() && l.chamandoPor) pills.push(`<span class="pill today">${l.chamandoPor===meuNome() ? "Você está chamando" : `${esc(firstName(l.chamandoPor))} está chamando`}</span>`);
   if(stage.retry && l.tentativas) pills.push(`<span class="pill muted">Tentativa ${l.tentativas} de ${MAX_TENT}</span>`);
   pills.push(`<span class="pill ${st.cls}">${esc(st.txt)}</span>`);
 
@@ -493,9 +553,11 @@ function cardHTML(l){
     info.push(`<div class="steps">${POS.map(p=>`<span class="step ${feitos.includes(p.k)?"done":p.k===l.posAtual?"now":""}">${esc(p.curto)}</span>`).join("")}</div>`);
   }
   if(l.obs) info.push(`<span>${esc(l.obs)}</span>`);
+  for(const n of (l.notas||[]).slice(-3)) info.push(`<span><b>Nota ${br(n.data)}${n.por?` · ${esc(firstName(n.por))}`:""}:</b> ${esc(n.texto)}</span>`);
 
   const ps = pendingStage.get(l.id);
-  const stageBox = ps ? `<div class="stagebox"><b>Mudar para ${esc(STAGES[ps].label)}</b>
+  const stageBox = ps ? `<div class="stagebox"><b>${pendingPegar.has(l.id) ? "Respondeu: ficar com o lead" : ps==="negociando" && pendingCtxOnly.has(l.id) ? "Atualizar o que travou" : `Mudar para ${esc(STAGES[ps].label)}`}</b>
+      ${ps==="negociando" ? `<p class="tplhelp">Antes de seguir, registre o que ficou em aberto. A próxima mensagem vai usar isso.</p>` : ""}
       <div class="grid2">${extrasFields(ps, `x-${id}-`, l)}</div>
       <div class="row"><button class="btn primary" type="button" data-act="stage-ok">Confirmar</button><button class="btn ghost" type="button" data-act="stage-no">Cancelar</button></div></div>` : "";
 
@@ -510,6 +572,7 @@ function cardHTML(l){
         <label class="f">Nome*<input type="text" id="ed-nome-${id}" value="${esc(l.nome)}"></label>
         <label class="f">WhatsApp*<input type="tel" id="ed-tel-${id}" value="${esc(l.telefone)}"></label>
         <label class="f">Curso<input type="text" id="ed-curso-${id}" value="${esc(l.curso||"")}" placeholder="Ex.: Administração"></label>
+        <label class="f">Indicado por (aluno)<input type="text" id="ed-ind-${id}" list="alunosList" autocomplete="off" value="${esc(l.indicadoPor||"")}"></label>
         <label class="f">Origem<select id="ed-origem-${id}"><option value="">Não sei ainda</option>${ORIGENS.map(o=>`<option${o===l.origem?" selected":""}>${esc(o)}</option>`).join("")}</select></label>
         ${l.etapa==="matriculado"?`<label class="f">Dia de vencimento do boleto<input type="number" min="1" max="31" id="ed-venc-${id}" value="${esc(l.diaVencimento||"")}"></label>`:""}
       </div>
@@ -519,20 +582,25 @@ function cardHTML(l){
   return `<article class="card ${st.cls}" data-id="${id}">
     <div class="top">
       <div class="who"><h3>${esc(l.nome)}</h3>
-        <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}</span>`:""}${l.origem?`<span>via ${esc(l.origem)}</span>`:""}</div></div>
+        <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}</span>`:""}${l.origem?`<span>via ${esc(l.origem)}</span>`:""}${l.indicadoPor?`<span>indicado por ${esc(l.indicadoPor)}</span>`:""}</div></div>
       <div class="pills">${pills.join("")}</div>
     </div>
+    ${l.objecao && !["matriculado","perdido","naoquer"].includes(l.etapa) ? `<div class="ctx"><span><b>Travou:</b> ${esc(objLabel(l.objecao))}</span>${l.resumo?`<span><b>Última conversa${l.resumoEm?` (${br(l.resumoEm)}${l.resumoPor?`, ${esc(firstName(l.resumoPor))}`:""})`:""}:</b> ${esc(l.resumo)}</span>`:""}</div>` : ""}
     ${info.length?`<div class="info">${info.join("")}</div>`:""}
     ${canMsg?`<details class="msg"${st.cls==="late"||st.cls==="today"?" open":""}><summary>Mensagem pronta${l.etapa==="matriculado"&&l.posAtual?` · ${esc(POS.find(p=>p.k===l.posAtual).label)}`:""}</summary>
       <textarea id="msg-${id}" data-draft="${id}">${esc(text)}</textarea></details>`:""}
+    ${rotKey(l) ? `<details class="msg"><summary>Roteiro do áudio · ${esc(rotKey(l)==="rot_novo" ? "primeiro contato" : objLabel(l.objecao))}</summary><div class="rot">${esc(tpl[rotKey(l)]).replace(/\n/g,"<br>")}</div></details>` : ""}
     ${stageBox}${dateBox}${editBox}
+    ${pendingNota.has(l.id) ? `<div class="stagebox"><b>Anotar</b>
+      <label class="f">O que você quer registrar?<textarea id="nota-${id}" placeholder="Ex.: mãe vai pagar, prefere contato à noite, tem FIES…"></textarea></label>
+      <div class="row"><button class="btn primary" type="button" data-act="nota-ok">Salvar anotação</button><button class="btn ghost" type="button" data-act="nota-no">Cancelar</button></div></div>` : ""}
     <div class="actions">
       ${canMsg?`<a class="btn primary" data-wa="${id}" href="${esc(waLink(l,text))}" target="_blank" rel="noopener">Abrir no WhatsApp</a>
       <button class="btn" type="button" data-act="enviado">Marcar como enviada</button>`:
       (l.etapa!=="naoquer"?`<a class="btn" href="${esc(`https://wa.me/${phoneDigits(l.telefone)}`)}" target="_blank" rel="noopener">WhatsApp</a>`:"")}
       ${respondBtn}
-      ${l.risco && !l.riscoAvisado ? `<button class="btn danger" type="button" data-act="avisei">Avisei a Permanência</button>` : ""}
-      <select data-act="etapa" id="etapa-${id}" aria-label="Mudar situação">
+      ${l.risco && !l.riscoAvisado ? `<button class="btn danger" type="button" data-act="avisei">${isPerm() ? "Assumi o caso" : "Avisei a Permanência"}</button>` : ""}
+      ${isPerm() ? "" : `<select data-act="etapa" id="etapa-${id}" aria-label="Mudar situação">
         <option value="">Mudar situação…</option>
         ${Object.entries(STAGES).filter(([k])=>k!==l.etapa).map(([k,s])=>`<option value="${k}">${esc(s.label)}</option>`).join("")}
       </select>
@@ -543,19 +611,25 @@ function cardHTML(l){
         <option value="">Passar para…</option>
         ${equipe.filter(n=>n!==l.responsavel).map(n=>`<option>${esc(n)}</option>`).join("")}
       </select>
-      <button class="btn ghost" type="button" data-act="edit">${faltam.length?`Completar dados (${faltam.join(", ")})`:"Editar dados"}</button>
+      `}
+      ${["informado","negociando","frio"].includes(l.etapa) && l.responsavel && !isPerm() ? `<button class="btn ghost" type="button" data-act="ctx">${l.objecao ? "Atualizar o que travou" : "Registrar o que travou"}</button>` : ""}
+      <button class="btn ghost" type="button" data-act="nota">Anotar</button>
+      ${isPerm() ? "" : `<button class="btn ghost" type="button" data-act="edit">${faltam.length?`Completar dados (${faltam.join(", ")})`:"Editar dados"}</button>
       ${confirmDel.has(l.id)
         ? `<span class="confirm">Excluir mesmo? <button class="btn danger" type="button" data-act="del-ok">Excluir</button><button class="btn ghost" type="button" data-act="del-no">Não</button></span>`
-        : `<button class="btn ghost danger" type="button" data-act="del">Excluir</button>`}
+        : `<button class="btn ghost danger" type="button" data-act="del">Excluir</button>`}`}
     </div>
     ${hist.length?`<ul class="hist">${hist.map(h=>`<li>${br(h.data)} · ${esc(h.acao)}${h.por?` <span style="opacity:.8">(${esc(h.por)})</span>`:""}</li>`).join("")}</ul>`:""}
   </article>`;
 }
 const emptyHTML = (title, body) => `<div class="empty"><strong>${title}</strong>${body}</div>`;
 
+let fromSnap = false;
+function renderSnap(){ fromSnap = true; try{ render(); } finally { fromSnap = false; } }
 function render(){
   const a = document.activeElement;
-  if(a && a.closest && a.closest("#list") && ["TEXTAREA","SELECT","INPUT"].includes(a.tagName)){ pendingRender = true; return; }
+  if(!fromSnap){ const f = document.activeElement; if(f && f!==document.body && f.blur && f.closest && f.closest("#list,.tabs,#chips")) f.blur(); }
+  if(fromSnap && a && a.closest && a.closest("#list") && ["TEXTAREA","SELECT","INPUT"].includes(a.tagName) && document.body.contains(a)){ pendingRender = true; return; }
   pendingRender = false;
   const t = today(); const L = mine().filter(l=>l.responsavel); const pool = leads.filter(isPool);
   const due = L.filter(l=>l.proximo && l.proximo<=t).sort((x,y)=>x.proximo.localeCompare(y.proximo)||String(x.nome).localeCompare(y.nome));
@@ -567,7 +641,7 @@ function render(){
   document.getElementById("sRisk").textContent = alunos.filter(l=>l.risco).length;
   { const mm = metas[mesKey()] || {}; const quem = resp==="todas" ? equipe : [resp];
     const meta = quem.reduce((a,n)=>a+(Number(mm[n]) || META_PADRAO), 0);
-    const feitas = leads.filter(l=>quem.includes(l.responsavel) && String(l.matriculadoEm||"").slice(0,7)===mesKey()).length;
+    const feitas = leads.filter(l=>quem.includes(l.responsavel) && matDate(l).slice(0,7)===mesKey()).length;
     const falta = Math.max(0, meta-feitas), du = diasUteisRestantes();
     document.getElementById("metaStrip").innerHTML = `<div class="l1"><span><b>${resp==="todas"?"Equipe":esc(resp)} · ${mesNome()}:</b> ${feitas} de ${meta} matrículas (${pct(feitas,meta)})</span>
       <span>${falta===0 ? "Meta batida" : `Faltam ${falta} · ${du ? num1(falta/du)+" por dia útil" : "mês encerrado"}`}</span></div>
@@ -589,10 +663,30 @@ function render(){
   if(!db){ list.innerHTML = emptyHTML("Conectando…","Carregando os leads da equipe."); return; }
 
   if(tab==="semdona"){
-    const ord = pool.slice().sort((x,y)=>String(x.proximo||"9").localeCompare(String(y.proximo||"9")) || String(x.nome).localeCompare(y.nome));
-    const hoje = ord.filter(l=>l.proximo && l.proximo<=t).length;
-    list.innerHTML = ord.length ? `<p class="note">${ord.length} lead(s) sem vendedora · ${hoje} para chamar hoje. Qualquer uma pode chamar; quando o lead responder, quem conversou clica em <b>Respondeu: é minha</b>.</p>` + ord.map(cardHTML).join("")
-      : emptyHTML("Nenhum lead sem vendedora","Ao cadastrar um lead que ainda não respondeu, deixe a vendedora como <b>Sem vendedora</b>. Ele aparece aqui para todas chamarem.");
+    const eu = meuNome();
+    const minha = pool.filter(l=>l.filaDe===eu);
+    if(!poolVista) poolVista = minha.length ? "minha" : "todas";
+    const ocupado = l => l.chamandoEm===t && l.chamandoPor && l.chamandoPor!==eu && l.chamandoPor!==userEmail;
+    let ver = poolVista==="minha" ? pool.filter(l=>l.filaDe===eu || !l.filaDe) : pool.slice();
+    const nOcup = ver.filter(ocupado).length;
+    if(!mostrarOcup) ver = ver.filter(l=>!ocupado(l));
+    ver.sort((x,y)=>String(x.proximo||"9").localeCompare(String(y.proximo||"9")) || String(x.nome).localeCompare(y.nome));
+    const hoje = ver.filter(l=>l.proximo && l.proximo<=t).length;
+    const semFila = pool.filter(l=>!l.filaDe).length;
+    const distBox = !distAberto ? "" : `<div class="stagebox"><b>Distribuir leads sem vendedora</b>
+        <p class="tplhelp">Divide em rodízio, na ordem de quem precisa ser chamado primeiro. O lead continua sem dona até responder; só entra na fila de uma vendedora.</p>
+        <div class="row">${equipe.map((n,i)=>`<label class="chip" style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="dist-${i}" data-distnome="${esc(n)}" checked> ${esc(n)}</label>`).join("")}</div>
+        <label class="row" style="font-size:.85rem"><input type="checkbox" id="distTodos"> Redistribuir também os que já estão na fila de alguém</label>
+        <div class="row"><button class="btn primary" type="button" id="distOk">Distribuir ${semFila} lead(s) sem fila</button><button class="btn ghost" type="button" id="distNo">Cancelar</button></div></div>`;
+    list.innerHTML = `<section class="panel" style="gap:10px">
+        <div class="row" style="justify-content:space-between">
+          <div class="chips"><button type="button" class="chip" data-pv="minha" aria-pressed="${poolVista==="minha"}">Minha fila · ${minha.length}</button><button type="button" class="chip" data-pv="todas" aria-pressed="${poolVista==="todas"}">Todas · ${pool.length}</button></div>
+          ${podeGerir() ? `<button class="btn" type="button" id="btnDist">Distribuir entre as vendedoras</button>` : ""}
+        </div>
+        ${distBox}
+        <p class="note">${ver.length} lead(s) na lista · ${hoje} para chamar hoje${poolVista==="minha" ? " (sua fila + os que ainda não têm fila)" : ""}. Ao abrir o WhatsApp, o lead fica marcado como "está chamando" para as outras até o fim do dia. Quando responder, clique em <b>Respondeu: é minha</b>.
+        ${nOcup ? ` <button class="btn ghost" type="button" id="mostrarOcup">${mostrarOcup ? "Esconder" : "Mostrar"} ${nOcup} que colegas estão chamando</button>` : ""}</p>
+      </section>` + (ver.length ? ver.map(cardHTML).join("") : emptyHTML(pool.length ? "Nada para você aqui agora" : "Nenhum lead sem vendedora", pool.length ? "Troque para Todas para ver os outros leads." : "Ao cadastrar um lead que ainda não respondeu, deixe a vendedora como <b>Sem vendedora</b>."));
     return;
   }
   if(tab==="hoje"){
@@ -623,6 +717,10 @@ function render(){
       <div class="day">${agDia===t?"Hoje · ":""}${brLong(agDia)} · ${doDia.length} contato(s)</div>
       ${doDia.length ? doDia.map(cardHTML).join("") : emptyHTML("Nenhum contato neste dia","Escolha outro dia no calendário.")}`;
   } else if(tab==="pos"){
+    if(isPerm()){ const todos = leads.filter(l=>l.etapa==="matriculado").sort((x,y)=>(y.risco&&!y.riscoAvisado?1:0)-(x.risco&&!x.riscoAvisado?1:0) || (y.risco?1:0)-(x.risco?1:0) || String(x.nome).localeCompare(y.nome));
+      const r = todos.filter(l=>l.risco).length;
+      list.innerHTML = `<p class="note">${todos.length} aluno(s) matriculado(s) · <b>${r} em risco</b>. Os em risco aparecem primeiro. Use <b>Assumi o caso</b> ao começar a tratar, e <b>Anotar</b> para registrar o combinado.</p>` + (todos.length ? todos.map(cardHTML).join("") : emptyHTML("Nenhum aluno matriculado ainda",""));
+      return; }
     const ord = alunos.slice().sort((x,y)=>(y.risco?1:0)-(x.risco?1:0) || String(x.proximo||"9").localeCompare(String(y.proximo||"9")));
     list.innerHTML = ord.length ? ord.map(cardHTML).join("") :
       emptyHTML("Nenhum aluno matriculado ainda","Quando um lead virar matrícula, mude a situação para <b>Matriculado</b> e informe o dia de vencimento do boleto. A régua de contatos começa sozinha.");
@@ -636,7 +734,7 @@ function render(){
 }
 
 /* ---------- início / ranking ---------- */
-let rankPer = "mes";
+let rankPer = "mes", anoSel = new Date().getFullYear(), backupInfo = null;
 const RANK_PER = {hoje:"Hoje", semana:"Esta semana", mes:"Este mês"};
 function rankRange(){ const t = today();
   if(rankPer==="hoje") return [t,t];
@@ -652,8 +750,8 @@ function renderInicio(){
     for(const l of leads) for(const h of (l.historico||[])) if(h.por===n && inP(h.data)){ if(ATEND.test(h.acao)) atend++; if(/ficou com/.test(h.acao)) pegos++; }
     const mine_ = leads.filter(l=>l.responsavel===n);
     return {n, atend, pegos,
-      mats: mine_.filter(l=>inP(l.matriculadoEm)).length,
-      matsMes: mine_.filter(l=>String(l.matriculadoEm||"").slice(0,7)===mesKey()).length,
+      mats: mine_.filter(l=>inP(matDate(l))).length,
+      matsMes: mine_.filter(l=>matDate(l).slice(0,7)===mesKey()).length,
       meta: Number(mm[n]) || META_PADRAO,
       carteira: mine_.filter(l=>!["perdido","naoquer","matriculado"].includes(l.etapa)).length,
       atras: mine_.filter(l=>l.proximo && l.proximo<t).length};
@@ -661,7 +759,8 @@ function renderInicio(){
   const totM = rows.reduce((a,r)=>a+r.mats,0), totA = rows.reduce((a,r)=>a+r.atend,0);
   const metaEq = rows.reduce((a,r)=>a+r.meta,0), matsEq = rows.reduce((a,r)=>a+r.matsMes,0);
   const top = rows.slice(0,3);
-  el.innerHTML = `
+  const precisaBackup = podeGerir() && backupInfo && backupInfo.ultimoMes !== mesKey() && leads.length;
+  el.innerHTML = (precisaBackup ? `<div class="warn"><span><b>Backup de ${mesNome()}:</b> baixe a planilha com todos os leads e guarde no seu computador ou Drive.${backupInfo.ultimoEm ? ` Último backup em ${brAno(backupInfo.ultimoEm)}.` : ""}</span><button class="btn primary" type="button" id="btnBackup">Baixar backup agora</button></div>` : "") + `
     <div class="row" style="justify-content:space-between">
       <h3 class="sec">Ranking · ${RANK_PER[rankPer]}</h3>
       <div class="chips">${Object.entries(RANK_PER).map(([k,v])=>`<button type="button" class="chip" data-rper="${k}" aria-pressed="${k===rankPer}">${v}</button>`).join("")}</div>
@@ -675,7 +774,7 @@ function renderInicio(){
         <span class="lbl">${r.atend} atendimento(s) · ${r.pegos} lead(s) conquistado(s)</span>
       </div>`).join("")}</div>
     <section class="panel">
-      <div class="tblwrap"><table>
+      <div class="tblwrap"><table class="rank">
         <thead><tr><th>#</th><th>Vendedora</th><th>Matrículas</th><th>Atendimentos</th><th>Leads conquistados</th><th>Meta do mês</th><th>Carteira ativa</th><th>Atrasados</th></tr></thead>
         <tbody>${rows.map((r,i)=>`<tr class="${r.n===eu?"eu":""}"><td>${i+1}º</td><td><span class="pill owner" style="--c:var(--p${ownerColor(r.n)})">${esc(r.n)}</span></td>
           <td><b>${r.mats}</b></td><td>${r.atend}</td><td>${r.pegos}</td>
@@ -685,7 +784,7 @@ function renderInicio(){
       <p class="note">Ordem: matrículas no período; empate decide por atendimentos. Atendimentos são mensagens marcadas como enviadas e respostas registradas no sistema. Leads conquistados são os que ela pegou na aba Sem vendedora.</p>
     </section>`}`;
 }
-document.getElementById("inicio").addEventListener("click", e=>{ const b = e.target.closest("[data-rper]"); if(b){ rankPer = b.dataset.rper; renderInicio(); } });
+document.getElementById("inicio").addEventListener("click", e=>{ if(e.target.id==="btnBackup"){ exportarLeads(); return; } const b = e.target.closest("[data-rper]"); if(b){ rankPer = b.dataset.rper; renderInicio(); } });
 
 /* ---------- números ---------- */
 function periodRange(){
@@ -704,17 +803,24 @@ function renderNumeros(){
   const nomes = [...equipe, ...new Set(leads.map(l=>l.responsavel).filter(n=>n && !equipe.includes(n)))];
   const linha = (lista, todosLeads) => {
     const n = lista.filter(l=>inP(l.criadoEm)); const conv = n.filter(l=>l.etapa==="matriculado").length;
-    const mats = todosLeads.filter(l=>inP(l.matriculadoEm));
-    const tempos = mats.filter(l=>l.criadoEm).map(l=>diff(l.matriculadoEm, l.criadoEm));
+    const mats = todosLeads.filter(l=>inP(matDate(l)));
+    const tempos = mats.filter(l=>l.criadoEm).map(l=>diff(matDate(l), l.criadoEm)).filter(d=>d>=0);
     const media = tempos.length ? Math.round(tempos.reduce((a,b)=>a+b,0)/tempos.length) : null;
     return {leads:n.length, mats:mats.length, conv:pct(conv,n.length), media: media===null?"–":`${media} d`,
       atras: todosLeads.filter(l=>l.proximo && l.proximo<t).length, risco: todosLeads.filter(l=>l.risco).length};
   };
-  const rows = nomes.map(n=>{ const ls = leads.filter(l=>l.responsavel===n); return {n, ...linha(ls, ls)}; });
+  const primeiro = {}; const todosTempos = [];
+  for(const l of novos){ if(!l.criadoEm) continue;
+    const h = (l.historico||[]).find(h=>h.em && /enviad|retomado/.test(h.acao)); if(!h) continue;
+    const horas = (new Date(h.em) - new Date(l.criadoEm))/36e5; if(!(horas>=0)) continue;
+    (primeiro[h.por||"—"] = primeiro[h.por||"—"] || []).push(horas); todosTempos.push(horas); }
+  const fmtH = arr => { if(!arr || !arr.length) return "–"; const m = arr.reduce((a,b)=>a+b,0)/arr.length;
+    return m < 1 ? `${Math.max(1,Math.round(m*60))} min` : m < 48 ? `${num1(m)} h` : `${num1(m/24)} dias`; };
+  const rows = nomes.map(n=>{ const ls = leads.filter(l=>l.responsavel===n); return {n, ...linha(ls, ls), prim: fmtH(primeiro[n])}; });
   const tot = linha(leads, leads);
-  const td = r => `<td>${r.leads}</td><td>${r.mats}</td><td>${r.conv}</td><td>${r.media}</td><td>${r.atras}</td><td>${r.risco}</td>`;
+  const td = r => `<td>${r.leads}</td><td>${r.mats}</td><td>${r.conv}</td><td>${r.media}</td><td>${r.prim||"–"}</td><td>${r.atras}</td><td>${r.risco}</td>`;
   const mm = metas[mesKey()] || {}; const du = diasUteisRestantes();
-  const metaRows = equipe.map(n=>{ const meta = Number(mm[n]) || META_PADRAO; const feitas = leads.filter(l=>l.responsavel===n && String(l.matriculadoEm||"").slice(0,7)===mesKey()).length;
+  const metaRows = equipe.map(n=>{ const meta = Number(mm[n]) || META_PADRAO; const feitas = leads.filter(l=>l.responsavel===n && matDate(l).slice(0,7)===mesKey()).length;
     const falta = Math.max(0, meta-feitas); return {n, meta, feitas, falta, ritmo: !meta ? "–" : falta===0 ? "Meta batida" : du ? `${num1(falta/du)} por dia` : "Mês encerrado"}; });
   const metaTot = metaRows.reduce((a,r)=>({meta:a.meta+r.meta, feitas:a.feitas+r.feitas}), {meta:0, feitas:0});
 
@@ -724,7 +830,36 @@ function renderNumeros(){
   const mot = MOTIVOS.map(m=>({m, n:perdas.filter(l=>l.motivoPerda===m).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
   const maxM = Math.max(1, ...mot.map(x=>x.n));
 
-  el.innerHTML = `
+  const anos = [...new Set([new Date().getFullYear(), ...leads.map(l=>Number(matDate(l).slice(0,4))).filter(Boolean)])].sort((a,b)=>b-a);
+  if(!anos.includes(anoSel)) anoSel = anos[0];
+  const nomesAno = [...new Set([...membrosAtuais().map(m=>m.nome), ...leads.filter(l=>matDate(l).startsWith(anoSel+"-")).map(l=>l.responsavel||"Sem vendedora")])];
+  const cont = (n,m) => leads.filter(l=>(l.responsavel||"Sem vendedora")===n && matDate(l).slice(0,7)===`${anoSel}-${pad(m)}`).length;
+  const anoRows = nomesAno.map(n=>({n, meses:[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>cont(n,m))})).map(r=>({...r, tot:r.meses.reduce((a,b)=>a+b,0)})).filter(r=>r.tot || membrosAtuais().some(m=>m.nome===r.n && m.ativa!==false)).sort((a,b)=>b.tot-a.tot);
+  const mesAtual = anoSel===new Date().getFullYear() ? new Date().getMonth() : -1;
+  const MES3 = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  const anual = !podeGerir() ? "" : `<section class="panel">
+      <div class="row" style="justify-content:space-between"><h3 class="sec">Matrículas por mês · ${anoSel}</h3>
+        <select id="anoSel" style="width:auto">${anos.map(a=>`<option${a===anoSel?" selected":""}>${a}</option>`).join("")}</select></div>
+      <div class="tblwrap"><table class="rank">
+        <thead><tr><th>#</th><th>Vendedora</th>${MES3.map((m,i)=>`<th${i===mesAtual?' style="color:var(--accent)"':""}>${m}</th>`).join("")}<th>Total</th></tr></thead>
+        <tbody>${anoRows.map((r,i)=>`<tr><td>${i+1}º</td><td>${r.n==="Sem vendedora"?`<span class="pill muted">Sem vendedora</span>`:`<span class="pill owner" style="--c:var(--p${ownerColor(r.n)})">${esc(r.n)}</span>`}</td>${r.meses.map((v,i)=>`<td${i===mesAtual?' style="font-weight:700"':""}>${v||"·"}</td>`).join("")}<td><b>${r.tot}</b></td></tr>`).join("")}
+        <tr class="total"><td></td><td>Equipe</td>${[0,1,2,3,4,5,6,7,8,9,10,11].map(i=>`<td>${anoRows.reduce((a,r)=>a+r.meses[i],0)||"·"}</td>`).join("")}<td>${anoRows.reduce((a,r)=>a+r.tot,0)}</td></tr></tbody>
+      </table></div>
+      <p class="note">Conta pela data da matrícula informada no cadastro. Só você vê esta tabela.</p>
+    </section>`;
+  const ultimaAcao = l => { let d = String(l.criadoEm||"").slice(0,10); for(const h of (l.historico||[])) if(h.data>d) d = h.data; for(const n of (l.notas||[])) if(n.data>d) d = n.data; return d; };
+  const hojeT = today();
+  const parados = leads.filter(l=>l.responsavel && ["novo","informado","negociando"].includes(l.etapa)).map(l=>({l, u:ultimaAcao(l)})).filter(x=>x.u && diff(hojeT, x.u)>=15).sort((a,b)=>a.u.localeCompare(b.u));
+  const porVend = {}; for(const x of parados) porVend[x.l.responsavel] = (porVend[x.l.responsavel]||0)+1;
+  const paradosHTML = !podeGerir() ? "" : `<section class="panel">
+      <h3 class="sec">Leads parados · ${parados.length}</h3>
+      ${parados.length ? `<div class="chips">${Object.entries(porVend).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<span class="pill owner" style="--c:var(--p${ownerColor(n)})">${esc(n)}: ${q}</span>`).join("")}</div>
+      <div class="tblwrap"><table class="rank"><thead><tr><th>#</th><th>Lead</th><th>Vendedora</th><th>Situação</th><th>Última ação</th><th>Dias parado</th></tr></thead>
+      <tbody>${parados.slice(0,40).map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.l.nome)}</td><td>${esc(x.l.responsavel)}</td><td>${esc(STAGES[x.l.etapa].label)}</td><td>${brAno(x.u)}</td><td><b>${diff(hojeT,x.u)}</b></td></tr>`).join("")}</tbody></table></div>
+      ${parados.length>40?`<p class="note">…e mais ${parados.length-40}.</p>`:""}` : `<p class="note">Nenhum lead parado. Ótimo sinal.</p>`}
+      <p class="note">Leads em Novo, Recebeu informações ou Em conversa, com vendedora, sem nenhuma ação há 15 dias ou mais. Só você vê.</p>
+    </section>`;
+  el.innerHTML = anual + paradosHTML + `
     <div class="row"><label class="f" style="flex-direction:row;align-items:center;gap:8px">Período
       <select id="periodo" style="width:auto">
         <option value="mes"${periodo==="mes"?" selected":""}>Este mês</option>
@@ -746,16 +881,35 @@ function renderNumeros(){
     <section class="panel">
       <h3 class="sec">Por vendedora</h3>
       <div class="tblwrap"><table>
-        <thead><tr><th>Vendedora</th><th>Leads novos</th><th>Matrículas</th><th>Conversão</th><th>Dias até matricular</th><th>Atrasados hoje</th><th>Alunos em risco</th></tr></thead>
+        <thead><tr><th>Vendedora</th><th>Leads novos</th><th>Matrículas</th><th>Conversão</th><th>Dias até matricular</th><th>1º contato (média)</th><th>Atrasados hoje</th><th>Alunos em risco</th></tr></thead>
         <tbody>${rows.map(r=>`<tr><td><span class="pill owner" style="--c:var(--p${ownerColor(r.n)})">${esc(r.n)}</span></td>${td(r)}</tr>`).join("")}
-        <tr class="total"><td>Total</td>${td(tot)}</tr></tbody></table></div>
-      <p class="note">Conversão: dos leads cadastrados no período, quantos estão matriculados hoje. Matrículas: fechadas no período. Atrasados e em risco são a situação de agora.</p>
+        <tr class="total"><td>Total</td>${td({...tot, prim: fmtH(todosTempos)})}</tr></tbody></table></div>
+      <p class="note">Conversão: dos leads cadastrados no período, quantos estão matriculados hoje. Matrículas: fechadas no período. Atrasados e em risco são a situação de agora. 1º contato: tempo entre o cadastro do lead e a primeira mensagem marcada como enviada, por quem enviou (conta a partir de 30/09/2026).</p>
     </section>
     <section class="panel">
       <h3 class="sec">Por origem</h3>
       ${origens.length ? `<div class="tblwrap"><table><thead><tr><th>Origem</th><th>Leads</th><th>Matriculados</th><th>Conversão</th></tr></thead>
         <tbody>${origens.sort((a,b)=>b.n-a.n).map(x=>`<tr><td>${esc(x.o)}</td><td>${x.n}</td><td>${x.c}</td><td>${pct(x.c,x.n)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="note">Nenhum lead cadastrado no período.</p>`}
       ${semOrigem?`<p class="note">${semOrigem} lead(s) sem origem informada.</p>`:""}
+    </section>
+    <section class="panel">
+      <h3 class="sec">Indicações</h3>
+      ${(()=>{ const ind = leads.filter(l=>l.indicadoPor); if(!ind.length) return `<p class="note">Nenhuma indicação registrada ainda. Preencha "Indicado por" ao cadastrar o lead.</p>`;
+        const g = {}; for(const l of ind){ const k = norm(l.indicadoPor); (g[k] = g[k] || {nome:l.indicadoPor, n:0, m:0, vend:""}); g[k].n++; if(l.etapa==="matriculado") g[k].m++; }
+        for(const x of Object.values(g)){ const a = leads.find(l=>l.etapa==="matriculado" && norm(l.nome)===norm(x.nome)); x.vend = a ? (a.responsavel||"") : ""; }
+        const rows = Object.values(g).sort((a,b)=>b.m-a.m || b.n-a.n).slice(0,20);
+        const mats = ind.filter(l=>l.etapa==="matriculado").length, totM = leads.filter(l=>l.etapa==="matriculado").length;
+        return `<p class="note">${ind.length} lead(s) vieram de indicação · ${mats} viraram matrícula (${pct(mats,totM)} de todas as matrículas).</p>
+        <div class="tblwrap"><table class="rank"><thead><tr><th>#</th><th>Quem indicou</th><th>Indicações</th><th>Viraram matrícula</th><th>Vendedora do aluno</th></tr></thead>
+        <tbody>${rows.map((x,i)=>`<tr><td>${i+1}º</td><td>${esc(x.nome)}</td><td>${x.n}</td><td><b>${x.m}</b></td><td>${esc(x.vend||"—")}</td></tr>`).join("")}</tbody></table></div>`; })()}
+    </section>
+    <section class="panel">
+      <h3 class="sec">Por que não fecha</h3>
+      ${(()=>{ const ab = leads.filter(l=>l.objecao && !["matriculado"].includes(l.etapa));
+        const cnt = OBJECOES.map(([k,t])=>({t, n:ab.filter(l=>l.objecao===k).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
+        const mx = Math.max(1, ...cnt.map(x=>x.n));
+        return cnt.length ? cnt.map(x=>`<div class="bar"><span>${esc(x.t)}</span><div class="track"><div class="fill" style="width:${Math.round(x.n*100/mx)}%;background:var(--today)"></div></div><span class="v">${x.n}</span></div>`).join("") + `<p class="note">Leads que não viraram matrícula, pelo que travou na última conversa (${ab.length} no total).</p>`
+          : `<p class="note">Ainda sem registros. Aparece conforme as vendedoras preenchem "O que travou?".</p>`; })()}
     </section>
     <section class="panel">
       <h3 class="sec">Motivos de perda</h3>
@@ -774,13 +928,15 @@ function exportarLeads(){
   const rows = leads.slice().sort((a,b)=>String(a.nome).localeCompare(b.nome)).map(l=>{ const f = firstDue(l); return {
     "Nome":l.nome, "WhatsApp":phoneFmt(l.telefone), "Curso":l.curso||"", "Vendedora":l.responsavel||"", "Origem":l.origem||"",
     "Situação":(STAGES[l.etapa]||{}).label||l.etapa, "Próximo contato":l.proximo?brAno(l.proximo):"", "Tentativas":l.tentativas||0,
+    "Indicado por":l.indicadoPor||"", "O que travou":objLabel(l.objecao)||"", "Resumo da última conversa":l.resumo||"",
     "Pediu contato em":l.pedidoData?brAno(l.pedidoData):"", "Motivo do pedido":l.pedidoMotivo||"", "Motivo de perda":l.motivoPerda||"",
     "Data da matrícula":l.dataMatricula?brAno(l.dataMatricula):"", "Dia de vencimento":l.diaVencimento||"", "1º boleto":f?brAno(f):"",
     "Pós-matrícula feitos":(l.posFeitos||[]).length, "Em risco":l.risco?"Sim":"", "Cadastrado em":l.criadoEm?brAno(l.criadoEm):"",
     "Último envio":l.ultimoEnvio?brAno(l.ultimoEnvio):"", "Observações":l.obs||"" }; });
   saveXlsx(`leads-polo-${today()}.xlsx`, rows, "Leads");
+  if(podeGerir()) db.doc("config/backup").set({ultimoMes: mesKey(), ultimoEm: today()}).catch(()=>{});
 }
-document.getElementById("numeros").addEventListener("change", e=>{ if(e.target.id==="periodo"){ periodo = e.target.value; e.target.blur(); renderNumeros(); } });
+document.getElementById("numeros").addEventListener("change", e=>{ if(e.target.id==="anoSel"){ anoSel = Number(e.target.value); e.target.blur(); renderNumeros(); return; } if(e.target.id==="periodo"){ periodo = e.target.value; e.target.blur(); renderNumeros(); } });
 
 /* ---------- configurações ---------- */
 function renderConfig(force){
@@ -826,7 +982,7 @@ const COLS = [
   ["proximo",["proximo contato","proximo","retorno","data retorno","data de retorno"]], ["motivo",["motivo","motivo de perda","motivo perda"]],
   ["nome",["nome","nome completo","aluno","lead"]], ["telefone",["whatsapp","telefone","celular","fone","whats","contato"]],
   ["curso",["curso"]], ["responsavel",["vendedora","responsavel","consultora","vendedor"]], ["origem",["origem","canal"]],
-  ["situacao",["situacao","status","etapa"]], ["obs",["observacoes","observacao","obs"]]
+  ["indicadoPor",["indicado por","indicacao","quem indicou"]], ["situacao",["situacao","status","etapa"]], ["obs",["observacoes","observacao","obs"]]
 ];
 function mapHeaders(hs){
   const m = {};
@@ -877,7 +1033,8 @@ function parseRows(rows, def){
     if(st==="agendado"){ if(!prox){ bad.push({linha, nome, motivo:"pediu contato sem data no Próximo contato"}); return; } x.pedidoData = prox; x.pedidoMotivo = ""; }
     if(STAGES[st].motivo) x.motivoPerda = motivoFrom(g(r,"motivo"));
     const base = {nome, telefone:tel, curso:String(g(r,"curso")||"").trim(), responsavel:respFrom(g(r,"responsavel"), def),
-      origem:origemFrom(g(r,"origem")), obs:String(g(r,"obs")||"").trim(), criadoEm:new Date().toISOString(), ultimoEnvio:null};
+      origem: String(g(r,"indicadoPor")||"").trim() && !String(g(r,"origem")||"").trim() ? "Indicação" : origemFrom(g(r,"origem")),
+      indicadoPor:String(g(r,"indicadoPor")||"").trim(), indicadoPorId:alunoId(g(r,"indicadoPor")), obs:String(g(r,"obs")||"").trim(), criadoEm:new Date().toISOString(), ultimoEnvio:null};
     const d = stageData(base, st, x); if(prox && !needsExtras(st)) d.proximo = prox;
     ok.push({...base, ...d, historico:[{data:today(), acao:`importado da planilha · ${stageHist(st, x)}`}]});
   });
@@ -1003,16 +1160,20 @@ renderCampControls();
 
 /* ---------- equipe ---------- */
 const SITE = typeof FIREBASE_CONFIG !== "undefined";
-let membros = [], userEmail = "", saindo = null;
+let membros = [], userEmail = "", saindo = null, renomeando = null;
+let poolVista = "", mostrarOcup = false, distAberto = false, distRodando = false, patchExtra = {};
+const pendingNota = new Set();
 const podeGerir = () => !SITE || (typeof ADMIN_EMAILS !== "undefined" && ADMIN_EMAILS.map(e=>String(e).toLowerCase()).includes(userEmail));
+const meuPapel = () => { const m = membros.find(x=>x.ativa!==false && String(x.email||"").toLowerCase()===userEmail); return m ? (m.papel||"vendedora") : ""; };
+const isPerm = () => SITE && !podeGerir() && meuPapel()==="permanencia";
 const membrosAtuais = () => membros.length ? membros : equipe.map(n=>({nome:n, email:"", ativa:true}));
 const emAberto = n => leads.filter(l=>l.responsavel===n && !["perdido","naoquer"].includes(l.etapa));
 function aplicarEquipe(data){
   const m = Array.isArray(data && data.membros) ? data.membros : Array.isArray(data && data.nomes) ? data.nomes.map(n=>({nome:n, email:"", ativa:true})) : null;
   if(!m || !m.length) return;
-  membros = m; const at = m.filter(x=>x.ativa!==false).map(x=>x.nome); if(at.length) equipe = at;
+  membros = m; const at = m.filter(x=>x.ativa!==false && x.papel!=="permanencia").map(x=>x.nome); if(at.length) equipe = at;
   if(resp!=="todas" && !equipe.includes(resp)) resp = "todas";
-  renderChips(); render();
+  renderChips(); atualizarAdmin(); render();
 }
 async function salvarEquipe(m, msg){
   const ativos = m.filter(x=>x.ativa!==false);
@@ -1032,24 +1193,29 @@ function renderEquipe(force){
   if(!force && el.contains(document.activeElement) && document.activeElement.tagName!=="BUTTON") return;
   const m = membrosAtuais(); const ativos = m.filter(x=>x.ativa!==false), inativos = m.filter(x=>x.ativa===false);
   const mm = metas[mesKey()] || {}; const gerir = podeGerir();
-  const mats = n => leads.filter(l=>l.responsavel===n && String(l.matriculadoEm||"").slice(0,7)===mesKey()).length;
+  const mats = n => leads.filter(l=>l.responsavel===n && matDate(l).slice(0,7)===mesKey()).length;
   el.innerHTML = `
     ${gerir ? `<form class="panel" id="formVend">
       <h3 class="sec">Adicionar vendedora</h3>
       <div class="grid2">
         <label class="f">Nome*<input type="text" id="vNome" autocomplete="off" placeholder="Como aparece na etiqueta"></label>
         <label class="f">E-mail${SITE ? "*" : " (opcional)"}<input type="email" id="vEmail" autocomplete="off"></label>
-        <label class="f">Meta de ${mesNome()}<input type="number" min="1" id="vMeta" placeholder="${META_PADRAO}"></label>
+        <label class="f">Função<select id="vPapel"><option value="vendedora">Vendedora (comercial)</option><option value="permanencia">Permanência (só vê alunos matriculados)</option></select></label>
+        <label class="f">Meta de ${mesNome()} (vendedoras)<input type="number" min="1" id="vMeta" placeholder="${META_PADRAO}"></label>
       </div>
       ${SITE ? `<p class="tplhelp">Depois de adicionar, mande para ela o link do site. No primeiro acesso ela clica em <b>Primeiro acesso: criar minha senha</b> e usa este mesmo e-mail.</p>` : ""}
       <div class="row"><button class="btn primary" type="submit">Adicionar vendedora</button></div>
     </form>` : `<p class="note">Só a administradora pode adicionar ou desativar vendedoras.</p>`}
     <section class="panel">
       <h3 class="sec">Ativas · ${ativos.length}</h3>
-      <div class="tblwrap"><table><thead><tr><th>Vendedora</th>${SITE ? "<th>E-mail</th>" : ""}<th>Em aberto</th><th>Matrículas no mês</th><th>Meta</th>${gerir ? "<th></th>" : ""}</tr></thead><tbody>
-      ${ativos.map(x=>`<tr><td><span class="pill owner" style="--c:var(--p${ownerColor(x.nome)})">${esc(x.nome)}</span></td>${SITE ? `<td>${esc(x.email||"—")}</td>` : ""}<td>${emAberto(x.nome).length}</td><td>${mats(x.nome)}</td><td>${Number(mm[x.nome]) || META_PADRAO}</td>${gerir ? `<td><button class="btn ghost danger" type="button" data-sair="${esc(x.nome)}">Desativar</button></td>` : ""}</tr>`).join("")}
+      <div class="tblwrap"><table><thead><tr><th>Pessoa</th>${SITE ? "<th>E-mail</th>" : ""}<th>Em aberto</th><th>Matrículas no mês</th><th>Meta</th>${gerir ? "<th></th>" : ""}</tr></thead><tbody>
+      ${ativos.map(x=>`<tr><td><span class="pill owner" style="--c:var(--p${ownerColor(x.nome)})">${esc(x.nome)}</span>${x.papel==="permanencia" ? ` <span class="pill muted">Permanência</span>` : ""}</td>${SITE ? `<td>${esc(x.email||"—")}</td>` : ""}${x.papel==="permanencia" ? `<td>–</td><td>–</td><td>–</td>` : `<td>${emAberto(x.nome).length}</td><td>${mats(x.nome)}</td><td>${Number(mm[x.nome]) || META_PADRAO}</td>`}${gerir ? `<td style="white-space:nowrap"><button class="btn ghost" type="button" data-ren="${esc(x.nome)}">Renomear</button> <button class="btn ghost danger" type="button" data-sair="${esc(x.nome)}">Desativar</button></td>` : ""}</tr>`).join("")}
       </tbody></table></div>
       ${saindo ? boxSaida() : ""}
+      ${renomeando ? `<div class="stagebox"><b>Renomear ${esc(renomeando)}</b>
+        <div class="grid2"><label class="f">Novo nome<input type="text" id="renNome" value="${esc(renomeando)}" autocomplete="off"></label></div>
+        <p class="tplhelp">Todos os leads, matrículas e o histórico dela passam para o novo nome.</p>
+        <div class="row"><button class="btn primary" type="button" id="renOk">Salvar nome</button><button class="btn ghost" type="button" id="renNo">Cancelar</button></div></div>` : ""}
     </section>
     ${inativos.length ? `<section class="panel"><h3 class="sec">Inativas · ${inativos.length}</h3>
       <div class="list" style="gap:6px">${inativos.map(x=>`<div class="row" style="justify-content:space-between"><span>${esc(x.nome)}${x.saiuEm ? ` · saiu em ${brAno(x.saiuEm)}` : ""}</span>${gerir ? `<button class="btn" type="button" data-volta="${esc(x.nome)}">Reativar</button>` : ""}</div>`).join("")}</div>
@@ -1065,7 +1231,8 @@ document.getElementById("equipeBox").addEventListener("submit", async e=>{
   if(m.some(x=>norm(x.nome)===norm(nome))){ toast("Já existe alguém com esse nome. Use nome e sobrenome ou reative quem está inativa."); return; }
   if(SITE && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ toast("Informe um e-mail válido"); return; }
   if(email && m.some(x=>String(x.email||"").toLowerCase()===email)){ toast("Esse e-mail já está na equipe"); return; }
-  m.push({nome, email, ativa:true, desde:today()});
+  const papel = document.getElementById("vPapel").value;
+  m.push({nome, email, ativa:true, desde:today(), papel});
   if(await salvarEquipe(m, `${nome} adicionada à equipe`)){
     if(meta>0 && meta!==META_PADRAO){ try{ await db.doc("config/metas").set({...metas, [mesKey()]: {...(metas[mesKey()]||{}), [nome]: meta}}); }catch(err){ toast("Vendedora salva, mas a meta não. Ajuste em Configurações → Metas."); } }
     renderEquipe(true);
@@ -1074,7 +1241,28 @@ document.getElementById("equipeBox").addEventListener("submit", async e=>{
 document.getElementById("equipeBox").addEventListener("click", async e=>{
   if(!db) return;
   const s = e.target.closest("[data-sair]"), v = e.target.closest("[data-volta]");
-  if(s){ saindo = s.dataset.sair; renderEquipe(true); return; }
+  if(s){ saindo = s.dataset.sair; renomeando = null; renderEquipe(true); return; }
+  const rn = e.target.closest("[data-ren]"); if(rn){ renomeando = rn.dataset.ren; saindo = null; renderEquipe(true); return; }
+  if(e.target.id==="renNo"){ renomeando = null; renderEquipe(true); return; }
+  if(e.target.id==="renOk" && renomeando){
+    const velho = renomeando, novo = document.getElementById("renNome").value.trim().replace(/\s+/g," ");
+    if(!novo || novo===velho){ renomeando = null; renderEquipe(true); return; }
+    if(membrosAtuais().some(x=>x.nome!==velho && norm(x.nome)===norm(novo))){ toast("Já existe alguém com esse nome"); return; }
+    e.target.disabled = true; e.target.textContent = "Salvando…";
+    const afetados = leads.filter(l=>l.responsavel===velho || (l.historico||[]).some(h=>h.por===velho));
+    for(const l of afetados){
+      const d = {historico:(l.historico||[]).map(h=>h.por===velho ? {...h, por:novo} : h)};
+      if(l.responsavel===velho) d.responsavel = novo;
+      try{ await db.collection("leads").doc(l.id).update(d); }catch(err){ toast("Parou no meio. Tente de novo para terminar."); renderEquipe(true); return; }
+    }
+    const mt = {}; for(const [k,v] of Object.entries(metas)){ mt[k] = {...v}; if(v && v[velho]!==undefined){ mt[k][novo] = v[velho]; delete mt[k][velho]; } }
+    try{ await db.doc("config/metas").set(mt); }catch(err){}
+    const m = membrosAtuais().map(x=>x.nome===velho ? {...x, nome:novo} : {...x});
+    if(resp===velho){ resp = novo; try{ localStorage.setItem("resp", novo); }catch(err){} }
+    renomeando = null;
+    if(await salvarEquipe(m, `${velho} agora é ${novo} (${afetados.length} lead(s) atualizados)`)) renderEquipe(true);
+    return;
+  }
   if(e.target.id==="sairNo"){ saindo = null; renderEquipe(true); return; }
   if(e.target.id==="sairOk" && saindo){
     const nome = saindo; const para = document.getElementById("sairPara") ? document.getElementById("sairPara").value : null;
@@ -1092,11 +1280,15 @@ document.getElementById("equipeBox").addEventListener("click", async e=>{
 /* ---------- ações nos cards ---------- */
 async function patch(id, data, acao){
   const l = leads.find(x=>x.id===id); if(!l) return false;
-  const historico = [...(l.historico||[]), {data: today(), acao, por: meuNome() || userEmail || ""}].slice(-20);
-  try{ await db.collection("leads").doc(id).update({...data, historico}); return true; }
+  const historico = [...(l.historico||[]), {data: today(), em: new Date().toISOString(), acao, por: meuNome() || userEmail || ""}].slice(-20);
+  try{ await db.collection("leads").doc(id).update({...data, ...patchExtra, historico}); return true; }
   catch(e){ toast(e.code==="permission-denied" ? "Seu e-mail não tem permissão para editar. Fale com a Isabella." : "Não salvou. Tente de novo."); return false; }
 }
 async function marcarEnviado(l){
+  patchExtra = isPool(l) ? {chamandoPor: meuNome() || userEmail, chamandoEm: today()} : {};
+  try{ await marcarEnviado_(l); } finally { patchExtra = {}; }
+}
+async function marcarEnviado_(l){
   const t = today(); const s = STAGES[l.etapa] || {};
   if(l.etapa==="matriculado"){
     const feitos = [...(l.posFeitos||[])]; if(l.posAtual && !feitos.includes(l.posAtual)) feitos.push(l.posAtual);
@@ -1123,6 +1315,28 @@ async function marcarEnviado(l){
 
 const list = document.getElementById("list");
 list.addEventListener("click", async e=>{
+  const wa = e.target.closest("[data-wa]");
+  if(wa){ const l = leads.find(x=>x.id===wa.dataset.wa); const eu = meuNome() || userEmail;
+    if(l && isPool(l) && !(l.chamandoEm===today() && l.chamandoPor===eu)) patch(l.id, {chamandoPor:eu, chamandoEm:today()}, "começou a chamar");
+    return; }
+  const pv = e.target.closest("[data-pv]"); if(pv){ poolVista = pv.dataset.pv; render(); return; }
+  if(e.target.id==="mostrarOcup"){ mostrarOcup = !mostrarOcup; render(); return; }
+  if(e.target.id==="btnDist"){ distAberto = !distAberto; render(); return; }
+  if(e.target.id==="distNo"){ distAberto = false; render(); return; }
+  if(e.target.id==="distOk" && !distRodando){
+    const nomes = [...document.querySelectorAll("[data-distnome]")].filter(c=>c.checked).map(c=>c.dataset.distnome);
+    const todos = document.getElementById("distTodos").checked;
+    if(!nomes.length){ toast("Escolha pelo menos uma vendedora"); return; }
+    const alvo = leads.filter(l=>isPool(l) && (todos || !l.filaDe)).sort((a,b)=>String(a.proximo||"9").localeCompare(String(b.proximo||"9")) || String(a.nome).localeCompare(b.nome));
+    if(!alvo.length){ toast("Nenhum lead para distribuir"); return; }
+    distRodando = true; e.target.disabled = true; let n = 0;
+    for(const [i,l] of alvo.entries()){
+      const nome = nomes[i % nomes.length];
+      if(!(await patch(l.id, {filaDe:nome}, `fila: ${nome}`))) break;
+      n++; e.target.textContent = `Distribuindo… ${n} de ${alvo.length}`;
+    }
+    distRodando = false; distAberto = false; toast(`${n} lead(s) distribuídos entre ${nomes.length} vendedora(s)`); render(); return;
+  }
   const dia = e.target.closest("[data-dia]"); if(dia){ agDia = dia.dataset.dia; render(); return; }
   const mv = e.target.closest("[data-agmes]"); if(mv){ const [y,m] = agMes.split("-").map(Number); const d = new Date(y, m-1+Number(mv.dataset.agmes), 1);
     agMes = fmtISO(d).slice(0,7); agDia = agMes===today().slice(0,7) ? today() : fmtISO(d); render(); return; }
@@ -1131,23 +1345,36 @@ list.addEventListener("click", async e=>{
   const act = e.target.dataset.act;
   if(act==="enviado"){ drafts.delete(id); await marcarEnviado(l); }
   if(act==="respondeu"){
-    if(l.etapa==="matriculado") await patch(id, {posSemResposta:0, risco:false, riscoAvisado:null}, "aluno respondeu");
-    else { drafts.delete(id); await patch(id, {etapa:"negociando", tentativas:0, proximo:addDays(today(),3)}, "respondeu → Em conversa"); }
-    toast("Resposta registrada");
+    if(l.etapa==="matriculado"){ await patch(id, {posSemResposta:0, risco:false, riscoAvisado:null}, "aluno respondeu"); toast("Resposta registrada"); }
+    else { pendingStage.set(id, "negociando"); render(); }
+    return;
+  }
+  if(act==="ctx"){ pendingCtxOnly.add(id); pendingStage.set(id, "negociando"); render(); return; }
+  if(act==="nota"){ pendingNota.add(id); render(); setTimeout(()=>{ const t = document.getElementById(`nota-${id}`); if(t) t.focus(); },0); return; }
+  if(act==="nota-no"){ pendingNota.delete(id); render(); return; }
+  if(act==="nota-ok"){
+    const texto = (document.getElementById(`nota-${id}`)||{}).value || ""; if(!texto.trim()){ toast("Escreva a anotação"); return; }
+    const notas = [...(l.notas||[]), {data:today(), por:meuNome()||userEmail, texto:texto.trim().slice(0,500)}].slice(-30);
+    if(await patch(id, {notas}, "anotação")){ pendingNota.delete(id); toast("Anotação salva"); render(); }
+    return;
   }
   if(act==="pegar"){
-    const nome = meuNome();
-    if(!nome){ toast("Seu e-mail não está ligado a um nome na aba Equipe. Use Passar para…"); return; }
-    drafts.delete(id);
-    if(await patch(id, {responsavel:nome, ...stageData(l, "negociando", {})}, `respondeu → ficou com ${nome}`)) toast(`Lead agora é seu, ${firstName(nome)}. Próximo contato em 3 dias`);
+    if(!meuNome()){ toast("Seu e-mail não está ligado a um nome na aba Equipe. Use Passar para…"); return; }
+    pendingPegar.add(id); pendingStage.set(id, "negociando"); render(); return;
   }
-  if(act==="avisei"){ await patch(id, {riscoAvisado:today()}, "Permanência avisada"); toast("Registrado"); }
-  if(act==="stage-no"){ pendingStage.delete(id); render(); }
+  if(act==="avisei"){ const pm = isPerm(); await patch(id, {riscoAvisado:today()}, pm ? "Permanência assumiu o caso" : "Permanência avisada"); toast("Registrado"); }
+  if(act==="stage-no"){ pendingStage.delete(id); pendingPegar.delete(id); pendingCtxOnly.delete(id); render(); }
   if(act==="stage-ok"){
     const st = pendingStage.get(id); const x = readExtras(st, `x-${id}-`);
     if(x.err){ toast(x.err); return; }
     drafts.delete(id);
-    if(await patch(id, stageData(l, st, x), stageHist(st, x))){ pendingStage.delete(id); toast(`${STAGES[st].label}: salvo`); }
+    if(pendingCtxOnly.has(id)){
+      if(await patch(id, {objecao:x.objecao, resumo:x.resumo, resumoEm:today(), resumoPor:meuNome()||userEmail}, `travou: ${objLabel(x.objecao)} · "${x.resumo}"`)){ pendingCtxOnly.delete(id); pendingStage.delete(id); toast("Contexto atualizado. A mensagem pronta já usa ele"); render(); }
+      return;
+    }
+    let d = stageData(l, st, x), h = stageHist(st, x);
+    if(pendingPegar.has(id)){ const nome = meuNome(); d = {...d, responsavel:nome, filaDe:null, chamandoPor:null, chamandoEm:null}; h = `respondeu → ficou com ${nome} · ${h}`; }
+    if(await patch(id, d, h)){ const pg = pendingPegar.has(id); pendingStage.delete(id); pendingPegar.delete(id); toast(pg ? `Lead agora é seu, ${firstName(meuNome())}. Próximo contato em 3 dias` : `${STAGES[st].label}: salvo`); render(); }
   }
   if(act==="edit"){ pendingEdit.add(id); render(); }
   if(act==="edit-no"){ pendingEdit.delete(id); render(); }
@@ -1156,7 +1383,8 @@ list.addEventListener("click", async e=>{
     if(!nome){ toast("Informe o nome"); return; }
     if(phoneDigits(tel).length < 12){ toast("Confira o WhatsApp: informe DDD + número"); return; }
     const dp = findDup(tel, id); if(dp){ toast(dupTxt(dp)); return; }
-    const d = {nome, telefone:tel, curso:g("curso").value.trim(), origem:g("origem").value, obs:g("obs").value.trim()};
+    const ind = g("ind").value.trim();
+    const d = {nome, telefone:tel, curso:g("curso").value.trim(), origem: ind && !g("origem").value ? "Indicação" : g("origem").value, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind)};
     if(g("venc")){ const v = Number(g("venc").value); if(!(v>=1 && v<=31)){ toast("Dia de vencimento entre 1 e 31"); return; }
       if(v!==Number(l.diaVencimento)){ d.diaVencimento = v; if(l.posAtual==="pos_boleto" || !(l.posFeitos||[]).includes("pos_boleto")){ const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date; } } }
     drafts.delete(id);
@@ -1230,6 +1458,7 @@ function syncExtras(){
   box.innerHTML = needsExtras(st) ? extrasFields(st, "f-", null) : `<label class="f">Próximo contato<input type="date" id="fData" value="${addDays(today(), STAGES[st].dias)}"></label>`;
 }
 fEtapa.addEventListener("change", syncExtras);
+document.getElementById("fInd").addEventListener("input", e=>{ if(e.target.value.trim()) document.getElementById("fOrigem").value = "Indicação"; });
 document.getElementById("fTel").addEventListener("input", e=>{ dupOk = false; const w = document.getElementById("dupWarn"); const dp = findDup(e.target.value);
   if(dp){ w.hidden = false; w.innerHTML = `<span>${esc(dupTxt(dp))}</span>`; } else w.hidden = true; });
 document.getElementById("dupWarn").addEventListener("click", e=>{ if(e.target.id==="dupSave"){ dupOk = true; form.requestSubmit(); } });
@@ -1247,7 +1476,8 @@ form.addEventListener("submit", async e=>{
   const base = {
     nome: document.getElementById("fNome").value.trim(), telefone: tel,
     curso: document.getElementById("fCurso").value.trim(), responsavel: document.getElementById("fResp").value,
-    origem, obs: document.getElementById("fObs").value.trim(), criadoEm: new Date().toISOString(), ultimoEnvio: null
+    origem, obs: document.getElementById("fObs").value.trim(), criadoEm: new Date().toISOString(), ultimoEnvio: null,
+    indicadoPor: document.getElementById("fInd").value.trim(), indicadoPorId: alunoId(document.getElementById("fInd").value.trim())
   };
   const d = stageData(base, st, x);
   if(!needsExtras(st)){ const fd = document.getElementById("fData"); if(fd && fd.value) d.proximo = fd.value; }
@@ -1271,8 +1501,12 @@ const fs = firebase.firestore();
 fs.settings({ignoreUndefinedProperties:true, merge:true});
 let unsubs = [];
 function atualizarAdmin(){
-  const adm = podeGerir();
+  const adm = podeGerir(), perm = isPerm();
   document.querySelectorAll(".tab.adm").forEach(b=>b.hidden = !adm);
+  document.querySelectorAll(".tab").forEach(b=>{ if(!b.classList.contains("adm")) b.hidden = perm && b.dataset.tab!=="pos"; });
+  document.querySelectorAll(".tlabel").forEach(x=>x.hidden = perm);
+  ["btnNovo","metaStrip"].forEach(i=>{ const el = document.getElementById(i); if(el) el.hidden = perm; });
+  if(perm && tab!=="pos"){ tab = "pos"; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab==="pos")); render(); return; }
   if(!adm && (tab==="equipe" || tab==="config")){ tab = "inicio"; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab==="inicio")); render(); }
 }
 function semAcesso(){ const b = document.getElementById("banner"); b.hidden = false;
@@ -1285,10 +1519,11 @@ auth.onAuthStateChanged(u=>{
   document.getElementById("banner").hidden = true;
   db = fs;
   const onErr = e => { if(e.code==="permission-denied") semAcesso(); else toast("Conexão perdida. Recarregue a página."); };
-  unsubs.push(db.collection("leads").onSnapshot(s=>{ leads = s.docs.map(x=>({id:x.id, ...x.data()})); render(); if(tab==="campanhas") renderCampList(); }, onErr));
-  unsubs.push(db.doc("config/mensagens").onSnapshot(s=>{ tpl = {...DEFAULT_TPL, ...(s.exists ? s.data() : {})}; render(); }, ()=>{}));
-  unsubs.push(db.doc("config/metas").onSnapshot(s=>{ metas = s.exists ? {...s.data()} : {}; render(); }, ()=>{}));
-  unsubs.push(db.doc("config/calendario").onSnapshot(s=>{ const r = s.exists && s.data().rematricula; rematJanelas = Array.isArray(r) ? r : []; render(); }, ()=>{}));
+  unsubs.push(db.collection("leads").onSnapshot(s=>{ leads = s.docs.map(x=>({id:x.id, ...x.data()})); atualizarAlunosList(); renderSnap(); if(tab==="campanhas") renderCampList(); }, onErr));
+  unsubs.push(db.doc("config/mensagens").onSnapshot(s=>{ tpl = {...DEFAULT_TPL, ...(s.exists ? s.data() : {})}; renderSnap(); }, ()=>{}));
+  unsubs.push(db.doc("config/backup").onSnapshot(s=>{ backupInfo = s.exists ? s.data() : {}; renderSnap(); }, ()=>{}));
+  unsubs.push(db.doc("config/metas").onSnapshot(s=>{ metas = s.exists ? {...s.data()} : {}; renderSnap(); }, ()=>{}));
+  unsubs.push(db.doc("config/calendario").onSnapshot(s=>{ const r = s.exists && s.data().rematricula; rematJanelas = Array.isArray(r) ? r : []; renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/equipe").onSnapshot(s=>{ if(s.exists) aplicarEquipe(s.data()); }, ()=>{}));
   renderChips(); render();
 });
