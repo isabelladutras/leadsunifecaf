@@ -64,9 +64,23 @@ button,select,input,textarea{font:inherit;color:inherit}
 .chips .lbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-right:4px}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 12px;cursor:pointer;font-size:.85rem}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
-.tab{background:none;border:none;padding:10px 12px;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
-.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs{display:flex;flex-wrap:wrap;gap:10px 20px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.tgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.tlabel{width:100%;font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.tab{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;font-weight:600;font-size:.88rem;color:var(--muted);white-space:nowrap}
+.tab:hover{color:var(--ink);border-color:var(--muted)}
+.tab[aria-selected="true"]{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .dow{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center;font-weight:600;padding-bottom:2px}
+.cday{background:var(--surface);border:1px solid var(--line);border-radius:8px;min-height:58px;padding:6px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;cursor:pointer;font-variant-numeric:tabular-nums;color:var(--ink);text-align:left}
+.cday.fora{visibility:hidden}
+.cday.passado{opacity:.6}
+.cday.hoje{border-color:var(--ink)}
+.cday.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cday .cnt{font-size:.72rem;font-weight:700;border-radius:999px;padding:1px 7px;background:var(--calm-soft);color:var(--calm)}
+.cday .cnt.late{background:var(--late-soft);color:var(--late)}
+.cday .cnt.today{background:var(--today-soft);color:var(--today)}
+@media (max-width:480px){.cday{min-height:46px;padding:4px}.cday .cnt{padding:1px 5px}}
 .tab .n{font-family:var(--f-mono);font-size:.75rem;margin-left:4px;opacity:.8}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -207,18 +221,22 @@ input[type=file]{font-size:.88rem;max-width:100%}
   <div class="metastrip" id="metaStrip"></div>
   <div class="chips" id="chips"></div>
 
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-tab="inicio" aria-selected="true">Início</button>
-    <button class="tab" role="tab" data-tab="hoje" aria-selected="false">Chamar hoje<span class="n" id="nHoje"></span></button>
-    <button class="tab" role="tab" data-tab="semdona" aria-selected="false">Sem vendedora<span class="n" id="nPool"></span></button>
-    <button class="tab" role="tab" data-tab="agenda" aria-selected="false">Agenda<span class="n" id="nAgenda"></span></button>
-    <button class="tab" role="tab" data-tab="pos" aria-selected="false">Pós-matrícula<span class="n" id="nPos"></span></button>
-    <button class="tab" role="tab" data-tab="todos" aria-selected="false">Todos<span class="n" id="nTodos"></span></button>
-    <button class="tab" role="tab" data-tab="campanhas" aria-selected="false">Campanhas</button>
-    <button class="tab" role="tab" data-tab="numeros" aria-selected="false">Números</button>
-    <button class="tab" role="tab" data-tab="equipe" aria-selected="false">Equipe</button>
-    <button class="tab" role="tab" data-tab="config" aria-selected="false">Configurações</button>
-  </div>
+  <nav class="tabs" role="tablist" aria-label="Menu">
+    <div class="tgroup"><span class="tlabel">Atendimento</span>
+      <button class="tab" role="tab" data-tab="inicio" aria-selected="true">Início</button>
+      <button class="tab" role="tab" data-tab="hoje" aria-selected="false">Chamar hoje<span class="n" id="nHoje"></span></button>
+      <button class="tab" role="tab" data-tab="semdona" aria-selected="false">Sem vendedora<span class="n" id="nPool"></span></button>
+      <button class="tab" role="tab" data-tab="agenda" aria-selected="false">Agenda<span class="n" id="nAgenda"></span></button>
+      <button class="tab" role="tab" data-tab="pos" aria-selected="false">Pós-matrícula<span class="n" id="nPos"></span></button>
+      <button class="tab" role="tab" data-tab="todos" aria-selected="false">Todos<span class="n" id="nTodos"></span></button>
+    </div>
+    <div class="tgroup"><span class="tlabel">Gestão</span>
+      <button class="tab" role="tab" data-tab="campanhas" aria-selected="false">Campanhas</button>
+      <button class="tab" role="tab" data-tab="numeros" aria-selected="false">Números</button>
+      <button class="tab adm" role="tab" data-tab="equipe" aria-selected="false" hidden>Equipe</button>
+      <button class="tab adm" role="tab" data-tab="config" aria-selected="false" hidden>Configurações</button>
+    </div>
+  </nav>
 
   <div id="filtros" class="row" hidden>
     <input type="search" id="busca" placeholder="Buscar por nome, telefone ou curso" style="flex:1;min-width:200px">
@@ -297,6 +315,7 @@ let db = null, leads = [], tpl = {...DEFAULT_TPL}, equipe = ["Isabella"], rematJ
 let dupOk = false, impText = "", impParsed = null, importing = false;
 const CAMP_DEFAULT = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Abrimos uma condição especial de matrícula para o curso de {curso} e lembrei de você. Quer que eu te passe os detalhes?";
 const campSit = new Set(["perdido","frio"]), campMot = new Set();
+let agMes = "", agDia = "";
 let tab = "inicio", resp = "todas", busca = "", filtroEtapa = "", filtroOrigem = "", periodo = "mes";
 const drafts = new Map(), confirmDel = new Set(), pendingStage = new Map(), pendingDate = new Set(), pendingEdit = new Set();
 let pendingRender = false;
@@ -581,10 +600,28 @@ function render(){
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
                     : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula."));
   } else if(tab==="agenda"){
-    if(!fut.length){ list.innerHTML = emptyHTML("Agenda vazia","Nenhum contato marcado para os próximos dias."); return; }
-    let html = "", last = "";
-    for(const l of fut){ if(l.proximo!==last){ html += `<div class="day">${brLong(l.proximo)}</div>`; last = l.proximo; } html += cardHTML(l); }
-    list.innerHTML = html;
+    const porDia = {}; for(const l of L) if(l.proximo) (porDia[l.proximo] = porDia[l.proximo] || []).push(l);
+    const [ay, am] = agMes.split("-").map(Number); const first = new Date(ay, am-1, 1); const nd = new Date(ay, am, 0).getDate();
+    let cells = ["dom","seg","ter","qua","qui","sex","sáb"].map(d=>`<span class="dow">${d}</span>`).join("");
+    for(let i=0;i<first.getDay();i++) cells += `<span class="cday fora"></span>`;
+    for(let d=1; d<=nd; d++){
+      const iso = `${agMes}-${pad(d)}`; const n = (porDia[iso]||[]).length;
+      const cls = ["cday", iso===t?"hoje":"", iso===agDia?"sel":"", iso<t?"passado":""].join(" ");
+      cells += `<button type="button" class="${cls}" data-dia="${iso}" aria-label="${brLong(iso)}, ${n} contato(s)"><span>${d}</span>${n?`<span class="cnt ${iso<t?"late":iso===t?"today":""}">${n}</span>`:""}</button>`;
+    }
+    const doDia = (porDia[agDia]||[]).slice().sort((x,y)=>String(x.nome).localeCompare(y.nome));
+    const mesLbl = `${MESES[am-1]} de ${ay}`;
+    list.innerHTML = `<section class="panel">
+        <div class="row" style="justify-content:space-between">
+          <button class="btn ghost" type="button" data-agmes="-1" aria-label="Mês anterior">‹</button>
+          <h3 class="sec" style="text-transform:capitalize">${mesLbl}</h3>
+          <button class="btn ghost" type="button" data-agmes="1" aria-label="Próximo mês">›</button>
+        </div>
+        <div class="cal">${cells}</div>
+        <p class="note">Toque num dia para ver os contatos. Vermelho: dias que já passaram com contato pendente.</p>
+      </section>
+      <div class="day">${agDia===t?"Hoje · ":""}${brLong(agDia)} · ${doDia.length} contato(s)</div>
+      ${doDia.length ? doDia.map(cardHTML).join("") : emptyHTML("Nenhum contato neste dia","Escolha outro dia no calendário.")}`;
   } else if(tab==="pos"){
     const ord = alunos.slice().sort((x,y)=>(y.risco?1:0)-(x.risco?1:0) || String(x.proximo||"9").localeCompare(String(y.proximo||"9")));
     list.innerHTML = ord.length ? ord.map(cardHTML).join("") :
@@ -1086,6 +1123,9 @@ async function marcarEnviado(l){
 
 const list = document.getElementById("list");
 list.addEventListener("click", async e=>{
+  const dia = e.target.closest("[data-dia]"); if(dia){ agDia = dia.dataset.dia; render(); return; }
+  const mv = e.target.closest("[data-agmes]"); if(mv){ const [y,m] = agMes.split("-").map(Number); const d = new Date(y, m-1+Number(mv.dataset.agmes), 1);
+    agMes = fmtISO(d).slice(0,7); agDia = agMes===today().slice(0,7) ? today() : fmtISO(d); render(); return; }
   const card = e.target.closest(".card"); if(!card) return; const id = card.dataset.id;
   const l = leads.find(x=>x.id===id); if(!l) return;
   const act = e.target.dataset.act;
@@ -1217,6 +1257,7 @@ form.addEventListener("submit", async e=>{
 });
 
 /* ---------- início ---------- */
+agMes = today().slice(0,7); agDia = today();
 document.getElementById("todayLbl").textContent = `Follow-up de ${brLong(today())}`;
 renderChips(); render();
 if(typeof FIREBASE_CONFIG==="undefined" || String(FIREBASE_CONFIG.apiKey).includes("COLE")){
@@ -1229,13 +1270,18 @@ const auth = firebase.auth();
 const fs = firebase.firestore();
 fs.settings({ignoreUndefinedProperties:true, merge:true});
 let unsubs = [];
+function atualizarAdmin(){
+  const adm = podeGerir();
+  document.querySelectorAll(".tab.adm").forEach(b=>b.hidden = !adm);
+  if(!adm && (tab==="equipe" || tab==="config")){ tab = "inicio"; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab==="inicio")); render(); }
+}
 function semAcesso(){ const b = document.getElementById("banner"); b.hidden = false;
   b.textContent = "Seu e-mail ainda não está na equipe. Peça para a Isabella adicionar você na aba Equipe com este mesmo e-mail e depois recarregue a página."; }
 auth.onAuthStateChanged(u=>{
   unsubs.forEach(f=>f()); unsubs = [];
   document.getElementById("login").hidden = !!u; document.getElementById("app").hidden = !u;
   if(!u){ db = null; leads = []; return; }
-  document.getElementById("userLbl").textContent = u.email; userEmail = String(u.email||"").toLowerCase();
+  document.getElementById("userLbl").textContent = u.email; userEmail = String(u.email||"").toLowerCase(); atualizarAdmin();
   document.getElementById("banner").hidden = true;
   db = fs;
   const onErr = e => { if(e.code==="permission-denied") semAcesso(); else toast("Conexão perdida. Recarregue a página."); };
