@@ -1177,7 +1177,8 @@ function aplicarEquipe(data){
 }
 async function salvarEquipe(m, msg){
   const ativos = m.filter(x=>x.ativa!==false);
-  try{ await db.doc("config/equipe").set({membros:m, nomes:ativos.map(x=>x.nome), emails:ativos.map(x=>String(x.email||"").toLowerCase()).filter(Boolean)}); toast(msg); return true; }
+  try{ await db.doc("config/equipe").set({membros:m, nomes:ativos.filter(x=>x.papel!=="permanencia").map(x=>x.nome), emails:ativos.map(x=>String(x.email||"").toLowerCase()).filter(Boolean),
+    emailsAcademico:ativos.filter(x=>x.papel==="permanencia").map(x=>String(x.email||"").toLowerCase()).filter(Boolean)}); toast(msg); return true; }
   catch(e){ toast(e.code==="permission-denied" ? "Só a administradora pode mudar a equipe." : "Não salvou. Tente de novo."); return false; }
 }
 function boxSaida(){
@@ -1200,7 +1201,7 @@ function renderEquipe(force){
       <div class="grid2">
         <label class="f">Nome*<input type="text" id="vNome" autocomplete="off" placeholder="Como aparece na etiqueta"></label>
         <label class="f">E-mail${SITE ? "*" : " (opcional)"}<input type="email" id="vEmail" autocomplete="off"></label>
-        <label class="f">Função<select id="vPapel"><option value="vendedora">Vendedora (comercial)</option><option value="permanencia">Permanência (só vê alunos matriculados)</option></select></label>
+        <label class="f">Função<select id="vPapel"><option value="vendedora">Vendedora (comercial)</option><option value="permanencia">Permanência (alunos matriculados + painel acadêmico)</option></select></label>
         <label class="f">Meta de ${mesNome()} (vendedoras)<input type="number" min="1" id="vMeta" placeholder="${META_PADRAO}"></label>
       </div>
       ${SITE ? `<p class="tplhelp">Depois de adicionar, mande para ela o link do site. No primeiro acesso ela clica em <b>Primeiro acesso: criar minha senha</b> e usa este mesmo e-mail.</p>` : ""}
