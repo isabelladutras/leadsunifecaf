@@ -208,7 +208,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
 
   <form class="panel" id="formNovo" hidden>
     <div class="grid2">
-      <label class="f">Nome*<input type="text" id="fNome" required autocomplete="off"></label>
+      <label class="f">Nome <span style="font-weight:400">(deixe em branco se não souber)</span><input type="text" id="fNome" autocomplete="off"></label>
       <label class="f">WhatsApp (com DDD)*<input type="tel" id="fTel" required placeholder="21 99999-9999" autocomplete="off"></label>
       <label class="f">Curso de interesse<input type="text" id="fCurso" placeholder="Ex.: Administração" autocomplete="off"></label>
       <label class="f">Vendedora<select id="fResp"></select></label>
@@ -377,11 +377,17 @@ const maxDate = (a,b) => a > b ? a : b;
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function phoneDigits(t){ let d = String(t||"").replace(/\D/g,""); if(d.length===10||d.length===11) d = "55"+d; return d; }
 function phoneFmt(t){ const d = String(t||"").replace(/\D/g,"").replace(/^55(?=\d{10,11}$)/,""); if(d.length===11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`; if(d.length===10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`; return t; }
-const firstName = n => String(n||"").trim().split(/\s+/)[0] || "";
+const SEM_NOME = /^(sem nome|nao sei|não sei|nao sabe|não sabe|desconhecido|sem|n\/a|na|lead|\?+|-+|x+|\.+)$/i;
+const temNome = n => { const t = String(n||"").trim(); return !!t && !SEM_NOME.test(t); };
+const firstName = n => temNome(n) ? String(n).trim().split(/\s+/)[0] : "";
+const nomeExib = l => temNome(l.nome) ? l.nome : "Sem nome";
+function trocaNome(t, n){ const f = firstName(n);
+  if(f) return t.replaceAll("{nome}", f);
+  return t.replace(/\s*,\s*\{nome\}/g, "").replace(/\{nome\}\s*,?\s*/g, ""); }
 function ownerColor(n){ const i = equipe.indexOf(n); if(i>=0) return i%6; let h=0; for(const c of String(n||"")) h=(h*31+c.charCodeAt(0))%6; return h; }
 function telKey(t){ const d = phoneDigits(t).replace(/^55/,""); return d.length>=10 ? d.slice(0,2)+d.slice(-8) : ""; }
 function findDup(t, exceptId){ const k = telKey(t); if(!k) return null; return leads.find(l=>l.id!==exceptId && telKey(l.telefone)===k) || null; }
-const dupTxt = d => `Esse WhatsApp já está cadastrado: ${d.nome} · vendedora ${d.responsavel||"—"} · ${(STAGES[d.etapa]||{}).label||""}.`;
+const dupTxt = d => `Esse WhatsApp já está cadastrado: ${nomeExib(d)} · vendedora ${d.responsavel||"—"} · ${(STAGES[d.etapa]||{}).label||""}.`;
 const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 const mesKey = () => today().slice(0,7);
 const mesNome = () => { const d = new Date(); return `${MESES[d.getMonth()]} de ${d.getFullYear()}`; };
@@ -452,7 +458,7 @@ function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual || null;
 function fillTpl(l){
   const k = tplKey(l); const t = k ? (tpl[k] || "") : "";
   const f = firstDue(l);
-  return t.replaceAll("{nome}", firstName(l.nome))
+  return trocaNome(t, l.nome)
           .replaceAll("{curso}", l.curso || "graduação")
           .replaceAll("{responsavel}", firstName(l.responsavel || meuNome()) || "equipe")
           .replaceAll("{motivo}", l.pedidoMotivo || "para retomarmos a conversa sobre a matrícula")
@@ -580,7 +586,7 @@ function cardHTML(l){
       <div class="row"><button class="btn primary" type="button" data-act="date-ok">Salvar data</button><button class="btn ghost" type="button" data-act="date-no">Cancelar</button></div></div>` : "";
   const editBox = pendingEdit.has(l.id) ? `<div class="stagebox"><b>Editar dados</b>
       <div class="grid2">
-        <label class="f">Nome*<input type="text" id="ed-nome-${id}" value="${esc(l.nome)}"></label>
+        <label class="f">Nome<input type="text" id="ed-nome-${id}" value="${esc(temNome(l.nome) ? l.nome : "")}" placeholder="Ainda não sabemos"></label>
         <label class="f">WhatsApp*<input type="tel" id="ed-tel-${id}" value="${esc(l.telefone)}"></label>
         <label class="f">Curso<input type="text" id="ed-curso-${id}" value="${esc(l.curso||"")}" placeholder="Ex.: Administração"></label>
         <label class="f">Indicado por (aluno)<input type="text" id="ed-ind-${id}" list="alunosList" autocomplete="off" value="${esc(l.indicadoPor||"")}"></label>
@@ -590,10 +596,10 @@ function cardHTML(l){
       </div>
       <label class="f">Observações<textarea id="ed-obs-${id}">${esc(l.obs||"")}</textarea></label>
       <div class="row"><button class="btn primary" type="button" data-act="edit-ok">Salvar dados</button><button class="btn ghost" type="button" data-act="edit-no">Cancelar</button></div></div>` : "";
-  const faltam = [!l.curso && "curso", !l.origem && "origem"].filter(Boolean);
+  const faltam = [!temNome(l.nome) && "nome", !l.curso && "curso", !l.origem && "origem"].filter(Boolean);
   return `<article class="card ${st.cls}" data-id="${id}">
     <div class="top">
-      <div class="who"><h3>${esc(l.nome)}</h3>
+      <div class="who"><h3>${temNome(l.nome) ? esc(l.nome) : `<span style="color:var(--muted)">Sem nome</span>`}</h3>
         <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}</span>`:""}${l.origem?`<span>via ${esc(l.origem)}</span>`:""}${l.indicadoPor?`<span>indicado por ${esc(l.indicadoPor)}</span>`:""}</div></div>
       <div class="pills">${pills.join("")}</div>
     </div>
@@ -874,7 +880,7 @@ function renderNumeros(){
       <h3 class="sec">Leads parados · ${parados.length}</h3>
       ${parados.length ? `<div class="chips">${Object.entries(porVend).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<span class="pill owner" style="--c:var(--p${ownerColor(n)})">${esc(n)}: ${q}</span>`).join("")}</div>
       <div class="tblwrap"><table class="rank"><thead><tr><th>#</th><th>Lead</th><th>Vendedora</th><th>Situação</th><th>Última ação</th><th>Dias parado</th></tr></thead>
-      <tbody>${parados.slice(0,40).map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.l.nome)}</td><td>${esc(x.l.responsavel)}</td><td>${esc(STAGES[x.l.etapa].label)}</td><td>${brAno(x.u)}</td><td><b>${diff(hojeT,x.u)}</b></td></tr>`).join("")}</tbody></table></div>
+      <tbody>${parados.slice(0,40).map((x,i)=>`<tr><td>${i+1}</td><td>${esc(nomeExib(x.l))}</td><td>${esc(x.l.responsavel)}</td><td>${esc(STAGES[x.l.etapa].label)}</td><td>${brAno(x.u)}</td><td><b>${diff(hojeT,x.u)}</b></td></tr>`).join("")}</tbody></table></div>
       ${parados.length>40?`<p class="note">…e mais ${parados.length-40}.</p>`:""}` : `<p class="note">Nenhum lead parado. Ótimo sinal.</p>`}
       <p class="note">Leads em Novo, Recebeu informações ou Em conversa, com vendedora, sem nenhuma ação há 15 dias ou mais. Só você vê.</p>
     </section>`;
@@ -1041,7 +1047,7 @@ function parseRows(rows, def){
   rows.forEach((r,i)=>{
     const linha = i+2; const nome = String(g(r,"nome")||"").trim(); const tel = String(g(r,"telefone")||"").trim();
     if(!nome && !tel) return;
-    if(!nome){ bad.push({linha, motivo:"sem nome"}); return; }
+    if(!nome && !tel) return;
     if(phoneDigits(tel).length<12){ bad.push({linha, nome, motivo:"WhatsApp inválido"}); return; }
     const k = telKey(tel); const d0 = findDup(tel);
     if(d0){ dup.push({linha, nome, com:`${d0.nome} (${d0.responsavel||"—"})`}); return; }
@@ -1145,13 +1151,13 @@ function campLista(){
     .sort((a,b)=>String(a.nome).localeCompare(b.nome));
 }
 const campFeita = l => (l.campanhas||[]).some(c=>c.nome===campLabel());
-function campText(l){ return campMsg.replaceAll("{nome}", firstName(l.nome)).replaceAll("{curso}", l.curso || "graduação").replaceAll("{responsavel}", l.responsavel || "equipe"); }
+function campText(l){ return trocaNome(campMsg, l.nome).replaceAll("{curso}", l.curso || "graduação").replaceAll("{responsavel}", l.responsavel || "equipe"); }
 function renderCampList(){
   const ls = campLista(); const feitas = ls.filter(campFeita).length;
   document.getElementById("campResumo").textContent = ls.length ? `${ls.length} lead(s) na lista · ${feitas} já receberam "${campLabel()}"` : "";
   document.getElementById("campList").innerHTML = !db ? emptyHTML("Conectando…","") : ls.length ? ls.map(l=>{ const f = campFeita(l); return `
     <div class="crow${f?" sent":""}" data-id="${esc(l.id)}">
-      <div class="who"><b>${esc(l.nome)}</b>
+      <div class="who"><b>${esc(nomeExib(l))}</b>
         <div class="pills"><span class="pill owner" style="--c:var(--p${ownerColor(l.responsavel)})">${esc(l.responsavel||"Sem vendedora")}</span><span class="pill stage">${esc(STAGES[l.etapa].label)}</span>${l.motivoPerda?`<span class="pill muted">${esc(l.motivoPerda)}</span>`:""}${f?`<span class="pill future">Enviada</span>`:""}</div></div>
       <div class="acts">
         <a class="btn primary" href="${esc(waLink(l, campText(l)))}" target="_blank" rel="noopener">Abrir no WhatsApp</a>
@@ -1403,7 +1409,6 @@ list.addEventListener("click", async e=>{
   if(act==="edit-no"){ pendingEdit.delete(id); render(); }
   if(act==="edit-ok"){
     const g = k => document.getElementById(`ed-${k}-${id}`); const nome = g("nome").value.trim(), tel = g("tel").value.trim();
-    if(!nome){ toast("Informe o nome"); return; }
     if(phoneDigits(tel).length < 12){ toast("Confira o WhatsApp: informe DDD + número"); return; }
     const dp = findDup(tel, id); if(dp){ toast(dupTxt(dp)); return; }
     const ind = g("ind").value.trim();
@@ -1511,7 +1516,7 @@ form.addEventListener("submit", async e=>{
   const d = stageData(base, st, x);
   if(!needsExtras(st)){ const fd = document.getElementById("fData"); if(fd && fd.value) d.proximo = fd.value; }
   const lead = {...base, ...d, historico:[{data: today(), acao: `cadastrado · ${stageHist(st, x)}`}]};
-  try{ await db.collection("leads").add(lead); form.reset(); form.hidden = true; dupOk = false; document.getElementById("dupWarn").hidden = true; toast(`${firstName(lead.nome)} cadastrado`); }
+  try{ await db.collection("leads").add(lead); form.reset(); form.hidden = true; dupOk = false; document.getElementById("dupWarn").hidden = true; toast(`${firstName(lead.nome) || "Lead"} cadastrado`); }
   catch(err){ toast(err.code==="permission-denied" ? "Seu e-mail não tem permissão para salvar. Fale com a Isabella." : err.code==="resource-exhausted" ? "Limite diário do plano gratuito atingido. Tente amanhã." : "Não salvou. Tente de novo."); }
 });
 
