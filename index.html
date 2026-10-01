@@ -301,7 +301,8 @@ const STAGES = {
   perdido:     {label:"Perdido",               dias:null, motivo:true,    hint:"sai da fila"},
   naoquer:     {label:"Não quer contato",      dias:null, motivo:true,    hint:"nunca mais entra na fila"}
 };
-const OBJECOES = [["preco","Preço / valor"],["horario","Horário / falta de tempo"],["familia","Vai decidir com a família"],["curso","Dúvida sobre o curso ou diploma"],["documentos","Documentação / processo"],["sumiu","Sumiu sem dar motivo"],["naorespondeu","Não respondeu"]];
+const OBJECOES = [["semtempo","Sem tempo agora, vai responder depois"],["conversando","Conversa andando bem, sem objeção"],["preco","Preço / valor"],["horario","Horário / falta de tempo"],["familia","Vai decidir com a família"],["curso","Dúvida sobre o curso ou diploma"],["documentos","Documentação / processo"],["sumiu","Sumiu sem dar motivo"],["naorespondeu","Não respondeu"],["outro","Outro (escrevo no resumo)"]];
+const NAO_OBJECAO = ["semtempo","conversando","outro"];
 const objLabel = k => (OBJECOES.find(o=>o[0]===k)||[,""])[1];
 const ORIGENS = ["Instagram","WhatsApp direto","Indicação","Site / Google","Panfleto / evento","Passou no polo","Outro"];
 const MOTIVOS = ["Preço","Horário / falta de tempo","Desistiu de estudar agora","Foi para outra faculdade","Nunca respondeu","Outro"];
@@ -325,6 +326,12 @@ const DEFAULT_TPL = {
   obj_curso: "Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?",
   obj_documentos: "Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?",
   obj_sumiu: "Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?",
+  obj_semtempo: "Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊",
+  obj_conversando: "Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?",
+  obj_outro: "Oi, {nome}! Tudo bem? Passando para retomarmos nossa conversa sobre o curso de {curso}. Posso te ajudar com algo?",
+  rot_semtempo: "• Áudio curto e leve, sem cobrança\n• Retome em uma frase o que vocês estavam falando\n• Pergunte se agora é um bom momento ou qual horário fica melhor",
+  rot_conversando: "• Retome o ponto onde a conversa parou\n• Responda a dúvida que ficou em aberto\n• Avance para o próximo passo: valores, condição ou documentos",
+  rot_outro: "• Leia o resumo antes de gravar\n• Retome o assunto da última conversa\n• Termine com uma pergunta simples",
   obj_naorespondeu: "Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?",
   rot_novo: "• Se apresente: seu nome e que você é do polo UniFECAF\n• Pergunte o que fez a pessoa procurar a faculdade agora (trabalho, promoção, sonho)\n• Confirme o curso de interesse e se já concluiu o ensino médio\n• Explique o formato do curso em uma frase\n• Termine com uma pergunta: \"posso te mandar os valores e a condição deste mês?\"",
   rot_preco: "• Valide: \"entendo, é um investimento importante\"\n• Traga o valor para o dia a dia (quanto dá por dia)\n• Apresente o parcelamento e a condição vigente, se houver\n• Lembre o retorno: o que o diploma muda no salário ou na carreira dela\n• Feche com escolha: \"prefere começar com a condição A ou B?\"",
@@ -488,7 +495,7 @@ function stageData(l, st, x){
       posFeitos:[], posSemResposta:0, risco:false, riscoAvisado:null});
     const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date;
   } else if(st==="negociando" && x && x.objecao){
-    Object.assign(d, {objecao:x.objecao, resumo:x.resumo, resumoEm:t, resumoPor:meuNome()||userEmail, proximo:addDays(t, s.dias)});
+    Object.assign(d, {objecao:x.objecao, resumo:x.resumo, resumoEm:t, resumoPor:meuNome()||userEmail, proximo:addDays(t, x.prox!=null ? x.prox : s.dias)});
   } else if(st==="agendado"){
     Object.assign(d, {pedidoData:x.pedidoData, pedidoMotivo:x.pedidoMotivo || "", proximo:x.pedidoData});
   } else if(s.motivo){
@@ -501,7 +508,7 @@ function stageHist(st, x){
   if(st==="agendado") return `pediu contato em ${brAno(x.pedidoData)}${x.pedidoMotivo?` (${x.pedidoMotivo})`:""}`;
   if(st==="matriculado") return x.primeiroBoleto ? `matriculado em ${br(x.dataMatricula)}, 1º boleto em ${brAno(x.primeiroBoleto)}${x.inicioAulas?`, aulas a partir de ${brAno(x.inicioAulas)}`:""}` : `matriculado em ${br(x.dataMatricula)}, boleto vence dia ${x.diaVencimento}`;
   if(s.motivo) return `${s.label}: ${x.motivoPerda}`;
-  if(st==="negociando" && x && x.objecao) return `Em conversa · travou: ${objLabel(x.objecao)} · "${x.resumo}"`;
+  if(st==="negociando" && x && x.objecao) return `Em conversa · ${objLabel(x.objecao)}${x.resumo ? ` · "${x.resumo}"` : ""}`;
   return `mudou para ${s.label}`;
 }
 function extrasFields(st, prefix, l){
@@ -511,8 +518,9 @@ function extrasFields(st, prefix, l){
     <label class="f">Vencimento do 1º boleto*<input type="date" id="${prefix}bol" value="${esc(l && l.primeiroBoleto || "")}"></label>
     <label class="f">Início das aulas*<input type="date" id="${prefix}ini" value="${esc(l && l.inicioAulas || "")}"></label>`;
   if(st==="negociando") return `
-    <label class="f">O que travou?*<select id="${prefix}obj"><option value="">Escolha…</option>${OBJECOES.map(([k,t])=>`<option value="${k}"${l && l.objecao===k ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
-    <label class="f">Resumo da conversa* <span style="font-weight:400">(opcional se não respondeu)</span><input type="text" id="${prefix}res" maxlength="200" placeholder="Ex.: achou caro, pediu para ver parcelamento" value="${esc(l && l.resumo || "")}"></label>`;
+    <label class="f">Como está a conversa?*<select id="${prefix}obj"><option value="">Escolha…</option>${OBJECOES.map(([k,t])=>`<option value="${k}"${l && l.objecao===k ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+    <label class="f">Chamar de novo<select id="${prefix}prox"><option value="0">Hoje mais tarde</option><option value="1">Amanhã</option><option value="2">Em 2 dias</option><option value="3" selected>Em 3 dias</option><option value="7">Em 7 dias</option></select></label>
+    <label class="f" style="grid-column:1/-1">Como foi a conversa <span style="font-weight:400">(escreva do seu jeito)</span><textarea id="${prefix}res" maxlength="400" rows="2" placeholder="Ex.: estava no trabalho, disse que me chama à noite; achou caro e pediu para ver parcelamento">${esc(l && l.resumo || "")}</textarea></label>`;
   if(st==="agendado") return `
     <label class="f">Chamar em*<input type="date" id="${prefix}ped" min="${t}"></label>
     <label class="f">Motivo do pedido<input type="text" id="${prefix}pmot" placeholder="Ex.: para ver a matrícula de fevereiro"></label>`;
@@ -527,9 +535,9 @@ function readExtras(st, prefix){
     if(bol < mat) return {err:"O 1º boleto não pode vencer antes da matrícula"};
     if(!ini) return {err:"Informe a data de início das aulas"}; if(ini < mat) return {err:"O início das aulas não pode ser antes da matrícula"};
     return {dataMatricula:mat, primeiroBoleto:bol, diaVencimento:Number(bol.slice(8,10)), inicioAulas:ini}; }
-  if(st==="negociando"){ const o = v("obj"), r = v("res");
-    if(!o) return {err:"Escolha o que travou"}; if(o!=="naorespondeu" && r.length < 5) return {err:"Escreva um resumo curto da conversa"};
-    return {objecao:o, resumo:r}; }
+  if(st==="negociando"){ const o = v("obj"), r = v("res"), pr = v("prox");
+    if(!o) return {err:"Escolha uma opção em \"O que travou?\""}; if(o==="outro" && r.length < 3) return {err:"Escreva como foi a conversa"};
+    return {objecao:o, resumo:r, prox: pr==="" ? 3 : Number(pr)}; }
   if(st==="agendado"){ const p = v("ped"); if(!p || p<today()) return {err:"Escolha hoje ou uma data futura"}; return {pedidoData:p, pedidoMotivo:v("pmot")}; }
   if(STAGES[st].motivo){ const m = v("mot"); if(!m) return {err:"Escolha o motivo"}; return {motivoPerda:m}; }
   return {};
@@ -573,8 +581,8 @@ function cardHTML(l){
   for(const n of (l.notas||[]).slice(-3)) info.push(`<span><b>Nota ${br(n.data)}${n.por?` · ${esc(firstName(n.por))}`:""}:</b> ${esc(n.texto)}</span>`);
 
   const ps = pendingStage.get(l.id);
-  const stageBox = ps ? `<div class="stagebox"><b>${pendingPegar.has(l.id) ? "Respondeu: ficar com o lead" : ps==="negociando" && pendingCtxOnly.has(l.id) ? "Atualizar o que travou" : `Mudar para ${esc(STAGES[ps].label)}`}</b>
-      ${ps==="negociando" ? `<p class="tplhelp">Antes de seguir, registre o que ficou em aberto. A próxima mensagem vai usar isso.</p>` : ""}
+  const stageBox = ps ? `<div class="stagebox"><b>${pendingPegar.has(l.id) ? "Respondeu: ficar com o lead" : ps==="negociando" && pendingCtxOnly.has(l.id) ? "Registrar conversa" : `Mudar para ${esc(STAGES[ps].label)}`}</b>
+      ${ps==="negociando" ? `<p class="tplhelp">Registre como está a conversa e quando chamar de novo. A próxima mensagem pronta usa isso.</p>` : ""}
       <div class="grid2">${extrasFields(ps, `x-${id}-`, l)}</div>
       <div class="row"><button class="btn primary" type="button" data-act="stage-ok">Confirmar</button><button class="btn ghost" type="button" data-act="stage-no">Cancelar</button></div></div>` : "";
 
@@ -603,7 +611,7 @@ function cardHTML(l){
         <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}</span>`:""}${l.origem?`<span>via ${esc(l.origem)}</span>`:""}${l.indicadoPor?`<span>indicado por ${esc(l.indicadoPor)}</span>`:""}</div></div>
       <div class="pills">${pills.join("")}</div>
     </div>
-    ${l.objecao && !["matriculado","perdido","naoquer"].includes(l.etapa) ? `<div class="ctx"><span><b>Travou:</b> ${esc(objLabel(l.objecao))}</span>${l.resumo?`<span><b>Última conversa${l.resumoEm?` (${br(l.resumoEm)}${l.resumoPor?`, ${esc(firstName(l.resumoPor))}`:""})`:""}:</b> ${esc(l.resumo)}</span>`:""}</div>` : ""}
+    ${l.objecao && !["matriculado","perdido","naoquer"].includes(l.etapa) ? `<div class="ctx"><span><b>${NAO_OBJECAO.includes(l.objecao) || l.objecao==="naorespondeu" ? "Situação" : "Travou"}:</b> ${esc(objLabel(l.objecao))}</span>${l.resumo?`<span><b>Última conversa${l.resumoEm?` (${br(l.resumoEm)}${l.resumoPor?`, ${esc(firstName(l.resumoPor))}`:""})`:""}:</b> ${esc(l.resumo)}</span>`:""}</div>` : ""}
     ${info.length?`<div class="info">${info.join("")}</div>`:""}
     ${canMsg?`<details class="msg"${st.cls==="late"||st.cls==="today"?" open":""}><summary>Mensagem pronta${l.etapa==="matriculado"&&l.posAtual?` · ${esc(POS.find(p=>p.k===l.posAtual).label)}`:""}</summary>
       <textarea id="msg-${id}" data-draft="${id}">${esc(text)}</textarea></details>`:""}
@@ -630,7 +638,7 @@ function cardHTML(l){
         ${equipe.filter(n=>n!==l.responsavel).map(n=>`<option>${esc(n)}</option>`).join("")}
       </select>
       `}
-      ${["informado","negociando","frio"].includes(l.etapa) && l.responsavel && !isPerm() ? `<button class="btn ghost" type="button" data-act="ctx">${l.objecao ? "Atualizar o que travou" : "Registrar o que travou"}</button>` : ""}
+      ${["informado","negociando","frio"].includes(l.etapa) && l.responsavel && !isPerm() ? `<button class="btn ghost" type="button" data-act="ctx">Registrar conversa</button>` : ""}
       <button class="btn ghost" type="button" data-act="nota">Anotar</button>
       ${isPerm() ? "" : `<button class="btn ghost" type="button" data-act="edit">${faltam.length?`Completar dados (${faltam.join(", ")})`:"Editar dados"}</button>
       ${confirmDel.has(l.id)
@@ -930,7 +938,7 @@ function renderNumeros(){
     </section>
     <section class="panel">
       <h3 class="sec">Por que não fecha</h3>
-      ${(()=>{ const ab = leads.filter(l=>l.objecao && !["matriculado"].includes(l.etapa));
+      ${(()=>{ const ab = leads.filter(l=>l.objecao && !NAO_OBJECAO.includes(l.objecao) && !["matriculado"].includes(l.etapa));
         const cnt = OBJECOES.map(([k,t])=>({t, n:ab.filter(l=>l.objecao===k).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
         const mx = Math.max(1, ...cnt.map(x=>x.n));
         return cnt.length ? cnt.map(x=>`<div class="bar"><span>${esc(x.t)}</span><div class="track"><div class="fill" style="width:${Math.round(x.n*100/mx)}%;background:var(--today)"></div></div><span class="v">${x.n}</span></div>`).join("") + `<p class="note">Leads que não viraram matrícula, pelo que travou na última conversa (${ab.length} no total).</p>`
@@ -1398,7 +1406,7 @@ list.addEventListener("click", async e=>{
     if(x.err){ toast(x.err); return; }
     drafts.delete(id);
     if(pendingCtxOnly.has(id)){
-      if(await patch(id, {objecao:x.objecao, resumo:x.resumo, resumoEm:today(), resumoPor:meuNome()||userEmail}, `travou: ${objLabel(x.objecao)} · "${x.resumo}"`)){ pendingCtxOnly.delete(id); pendingStage.delete(id); toast("Contexto atualizado. A mensagem pronta já usa ele"); render(); }
+      if(await patch(id, {objecao:x.objecao, resumo:x.resumo, resumoEm:today(), resumoPor:meuNome()||userEmail, proximo:addDays(today(), x.prox!=null ? x.prox : 3)}, `${objLabel(x.objecao)}${x.resumo ? ` · "${x.resumo}"` : ""}`)){ pendingCtxOnly.delete(id); pendingStage.delete(id); toast("Contexto atualizado. A mensagem pronta já usa ele"); render(); }
       return;
     }
     let d = stageData(l, st, x), h = stageHist(st, x);
@@ -1456,6 +1464,9 @@ list.addEventListener("change", async e=>{
   if(act==="resp"){ await patch(id, {responsavel:v}, `passado para ${v}`); toast(`Lead agora é da ${v}`); }
   if(pendingRender) render();
 });
+list.addEventListener("change", e=>{ const m = e.target.id && e.target.id.match(/^x-(.+)-obj$/); if(!m) return;
+  const pr = document.getElementById(`x-${m[1]}-prox`); if(!pr) return;
+  pr.value = e.target.value==="semtempo" ? "0" : e.target.value==="conversando" ? "1" : "3"; });
 list.addEventListener("input", e=>{
   const id = e.target.dataset.draft; if(!id) return;
   drafts.set(id, e.target.value);
