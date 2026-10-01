@@ -357,7 +357,8 @@ let tab = "inicio", resp = "todas", busca = "", filtroEtapa = "", filtroOrigem =
 const pendingPegar = new Set(), pendingCtxOnly = new Set();
 const drafts = new Map(), confirmDel = new Set(), pendingStage = new Map(), pendingDate = new Set(), pendingEdit = new Set();
 let pendingRender = false;
-try{ resp = localStorage.getItem("resp") || "todas"; }catch(e){}
+let respSalvo = false;
+try{ const r = localStorage.getItem("resp"); if(r){ resp = r; respSalvo = true; } }catch(e){}
 
 /* ---------- datas ---------- */
 const pad = n => String(n).padStart(2,"0");
@@ -389,7 +390,7 @@ function diasUteisRestantes(){ const d = new Date(); const fim = new Date(d.getF
 const num1 = v => (Math.round(v*10)/10).toString().replace(".",",");
 const pct = (a,b) => b ? Math.round(a*100/b)+"%" : "–";
 function toast(msg){ const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(()=>t.hidden=true, 2800); }
-const mine = () => leads.filter(l => resp==="todas" || l.responsavel===resp);
+const mine = () => leads.filter(l => resp==="todas" || l.responsavel===resp || (!l.responsavel && l.filaDe===resp));
 const matDate = l => String(l.dataMatricula || l.matriculadoEm || "").slice(0,10);
 function alunoId(nome){ const n = norm(nome); if(!n) return null; const a = leads.find(l=>l.etapa==="matriculado" && norm(l.nome)===n); return a ? a.id : null; }
 function atualizarAlunosList(){ const dl = document.getElementById("alunosList"); if(!dl) return;
@@ -642,7 +643,7 @@ function render(){
   if(!fromSnap){ const f = document.activeElement; if(f && f!==document.body && f.blur && f.closest && f.closest("#list,.tabs,#chips")) f.blur(); }
   if(fromSnap && a && a.closest && a.closest("#list") && ["TEXTAREA","SELECT","INPUT"].includes(a.tagName) && document.body.contains(a)){ pendingRender = true; return; }
   pendingRender = false;
-  const t = today(); const L = mine().filter(l=>l.responsavel); const pool = leads.filter(isPool);
+  const t = today(); const L = mine().filter(l=>l.responsavel || (isPool(l) && l.filaDe)); const pool = leads.filter(isPool);
   const due = L.filter(l=>l.proximo && l.proximo<=t).sort((x,y)=>x.proximo.localeCompare(y.proximo)||String(x.nome).localeCompare(y.nome));
   const fut = L.filter(l=>l.proximo && l.proximo>t).sort((x,y)=>x.proximo.localeCompare(y.proximo));
   const alunos = L.filter(l=>l.etapa==="matriculado");
@@ -658,7 +659,8 @@ function render(){
       <span>${falta===0 ? "Meta batida" : `Faltam ${falta} · ${du ? num1(falta/du)+" por dia útil" : "mês encerrado"}`}</span></div>
       <div class="track"><div class="fill" style="width:${Math.min(100, meta ? Math.round(feitas*100/meta) : 0)}%"></div></div>`; }
   document.getElementById("nHoje").textContent = due.length||"";
-  document.getElementById("nPool").textContent = pool.length||"";
+  { const eu = meuNome(); const vis = (resp==="todas" && podeGerir()) ? pool : pool.filter(l=>!l.filaDe || l.filaDe===eu || l.filaDe===resp);
+    document.getElementById("nPool").textContent = vis.filter(l=>l.proximo && l.proximo<=t).length || ""; }
   document.getElementById("nAgenda").textContent = fut.length||"";
   document.getElementById("nPos").textContent = alunos.length||"";
   document.getElementById("nTodos").textContent = mine().length||"";
@@ -675,14 +677,18 @@ function render(){
 
   if(tab==="semdona"){
     const eu = meuNome();
+    const ehHoje = l => l.proximo && l.proximo<=t;
     const minha = pool.filter(l=>l.filaDe===eu);
     if(!poolVista) poolVista = minha.length ? "minha" : "todas";
     const ocupado = l => l.chamandoEm===t && l.chamandoPor && l.chamandoPor!==eu && l.chamandoPor!==userEmail;
     let ver = poolVista==="minha" ? pool.filter(l=>l.filaDe===eu || !l.filaDe) : pool.slice();
+    const nFut = ver.filter(l=>!ehHoje(l)).length;
+    if(!poolFuturos) ver = ver.filter(ehHoje);
     const nOcup = ver.filter(ocupado).length;
     if(!mostrarOcup) ver = ver.filter(l=>!ocupado(l));
     ver.sort((x,y)=>String(x.proximo||"9").localeCompare(String(y.proximo||"9")) || String(x.nome).localeCompare(y.nome));
-    const hoje = ver.filter(l=>l.proximo && l.proximo<=t).length;
+    const hoje = ver.filter(ehHoje).length;
+    const minhaHoje = pool.filter(l=>(l.filaDe===eu || !l.filaDe) && ehHoje(l)).length, todasHoje = pool.filter(ehHoje).length;
     const semFila = pool.filter(l=>!l.filaDe).length;
     const distBox = !distAberto ? "" : `<div class="stagebox"><b>Distribuir leads sem vendedora</b>
         <p class="tplhelp">Divide em rodízio, na ordem de quem precisa ser chamado primeiro. O lead continua sem dona até responder; só entra na fila de uma vendedora.</p>
@@ -691,13 +697,14 @@ function render(){
         <div class="row"><button class="btn primary" type="button" id="distOk">Distribuir ${semFila} lead(s) sem fila</button><button class="btn ghost" type="button" id="distNo">Cancelar</button></div></div>`;
     list.innerHTML = `<section class="panel" style="gap:10px">
         <div class="row" style="justify-content:space-between">
-          <div class="chips"><button type="button" class="chip" data-pv="minha" aria-pressed="${poolVista==="minha"}">Minha fila · ${minha.length}</button><button type="button" class="chip" data-pv="todas" aria-pressed="${poolVista==="todas"}">Todas · ${pool.length}</button></div>
+          <div class="chips"><button type="button" class="chip" data-pv="minha" aria-pressed="${poolVista==="minha"}">Minha fila · ${minhaHoje} hoje</button><button type="button" class="chip" data-pv="todas" aria-pressed="${poolVista==="todas"}">Todas · ${todasHoje} hoje</button></div>
           ${podeGerir() ? `<button class="btn" type="button" id="btnDist">Distribuir entre as vendedoras</button>` : ""}
         </div>
         ${distBox}
-        <p class="note">${ver.length} lead(s) na lista · ${hoje} para chamar hoje${poolVista==="minha" ? " (sua fila + os que ainda não têm fila)" : ""}. Ao abrir o WhatsApp, o lead fica marcado como "está chamando" para as outras até o fim do dia. Quando responder, clique em <b>Respondeu: é minha</b>.
+        <p class="note"><b>${hoje} para chamar hoje</b>${poolVista==="minha" ? " (sua fila + os que ainda não têm fila)" : ""}. Ao marcar como enviada, o lead sai da lista de hoje e volta em ${RETRY_DIAS} dias se não responder.
+        ${nFut ? ` <button class="btn ghost" type="button" id="poolFut">${poolFuturos ? "Esconder" : "Ver também"} ${nFut} já chamado(s) / agendado(s) para outros dias</button>` : ""}<br> Ao abrir o WhatsApp, o lead fica marcado como "está chamando" para as outras até o fim do dia. Quando responder, clique em <b>Respondeu: é minha</b>.
         ${nOcup ? ` <button class="btn ghost" type="button" id="mostrarOcup">${mostrarOcup ? "Esconder" : "Mostrar"} ${nOcup} que colegas estão chamando</button>` : ""}</p>
-      </section>` + (ver.length ? ver.map(cardHTML).join("") : emptyHTML(pool.length ? "Nada para você aqui agora" : "Nenhum lead sem vendedora", pool.length ? "Troque para Todas para ver os outros leads." : "Ao cadastrar um lead que ainda não respondeu, deixe a vendedora como <b>Sem vendedora</b>."));
+      </section>` + (ver.length ? ver.map(cardHTML).join("") : emptyHTML(pool.length ? "Nada para chamar agora" : "Nenhum lead sem vendedora", pool.length ? "Todos os leads desta lista já foram chamados hoje. 🎉" : "Ao cadastrar um lead que ainda não respondeu, deixe a vendedora como <b>Sem vendedora</b>."));
     return;
   }
   if(tab==="hoje"){
@@ -1174,7 +1181,7 @@ renderCampControls();
 /* ---------- equipe ---------- */
 const SITE = typeof FIREBASE_CONFIG !== "undefined";
 let membros = [], userEmail = "", saindo = null, renomeando = null;
-let poolVista = "", mostrarOcup = false, distAberto = false, distRodando = false, patchExtra = {};
+let poolVista = "", poolFuturos = false, mostrarOcup = false, distAberto = false, distRodando = false, patchExtra = {};
 const pendingNota = new Set();
 const podeGerir = () => !SITE || (typeof ADMIN_EMAILS !== "undefined" && ADMIN_EMAILS.map(e=>String(e).toLowerCase()).includes(userEmail));
 const meuPapel = () => { const m = membros.find(x=>x.ativa!==false && String(x.email||"").toLowerCase()===userEmail); return m ? (m.papel||"vendedora") : ""; };
@@ -1186,6 +1193,7 @@ function aplicarEquipe(data){
   if(!m || !m.length) return;
   membros = m; const at = m.filter(x=>x.ativa!==false && x.papel!=="permanencia").map(x=>x.nome); if(at.length) equipe = at;
   if(resp!=="todas" && !equipe.includes(resp)) resp = "todas";
+  if(!respSalvo && SITE && !podeGerir() && meuNome() && equipe.includes(meuNome())){ resp = meuNome(); respSalvo = true; }
   renderChips(); atualizarAdmin(); render();
 }
 async function salvarEquipe(m, msg){
@@ -1334,6 +1342,7 @@ list.addEventListener("click", async e=>{
     if(l && isPool(l) && !(l.chamandoEm===today() && l.chamandoPor===eu)) patch(l.id, {chamandoPor:eu, chamandoEm:today()}, "começou a chamar");
     return; }
   const pv = e.target.closest("[data-pv]"); if(pv){ poolVista = pv.dataset.pv; render(); return; }
+  if(e.target.id==="poolFut"){ poolFuturos = !poolFuturos; render(); return; }
   if(e.target.id==="mostrarOcup"){ mostrarOcup = !mostrarOcup; render(); return; }
   if(e.target.id==="btnDist"){ distAberto = !distAberto; render(); return; }
   if(e.target.id==="distNo"){ distAberto = false; render(); return; }
