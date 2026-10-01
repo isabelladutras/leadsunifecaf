@@ -308,6 +308,7 @@ const MOTIVOS = ["Preço","Horário / falta de tempo","Desistiu de estudar agora
 const POS = [
   {k:"pos_d7",     label:"Boas-vindas",   curto:"7 dias"},
   {k:"pos_boleto", label:"1º boleto",     curto:"1º boleto"},
+  {k:"pos_inicio", label:"Início das aulas", curto:"Início"},
   {k:"pos_d30",    label:"Primeiro mês",  curto:"30 dias"},
   {k:"pos_d60",    label:"Indicação",     curto:"60 dias"},
   {k:"pos_remat",  label:"Rematrícula",   curto:"Rematrícula"}
@@ -335,6 +336,7 @@ const DEFAULT_TPL = {
   rot_naorespondeu: "• Áudio de até 1 minuto resumindo o principal: curso, formato e valor\n• Uma pergunta simples no final, de sim ou não\n• Evite mandar muitas mensagens seguidas",
   pos_d7: "Oi, {nome}! Já faz uma semana da sua matrícula no curso de {curso}. Está tudo certo com o acesso ao portal e às aulas? Qualquer dúvida, é só me chamar aqui.",
   pos_boleto: "Oi, {nome}! Passando para lembrar que o seu primeiro boleto vence em {vencimento}. Se precisar da 2ª via ou tiver alguma dúvida, é só me chamar aqui.",
+  pos_inicio: "Oi, {nome}! Suas aulas do curso de {curso} começam hoje! 🎉 Qualquer dúvida sobre o portal, as aulas ou os encontros no polo, estamos por aqui. Bons estudos!",
   pos_d30: "Oi, {nome}! Já completou um mês de aulas. Como está sendo o curso de {curso}? Está conseguindo acompanhar as aulas e o portal?",
   pos_d60: "Oi, {nome}! Que bom ter você com a gente na UniFECAF. Se tiver algum amigo ou familiar pensando em fazer faculdade, me passa o contato que eu cuido dele com o mesmo carinho.",
   pos_remat: "Oi, {nome}! A rematrícula do próximo semestre está chegando. Quer que eu te ajude a garantir a sua vaga no curso de {curso}?"
@@ -343,7 +345,7 @@ const TPL_GROUPS = [
   {title:"Leads", keys:[["novo","Novo – sem resposta"],["informado","Recebeu informações"],["negociando","Em conversa"],["agendado","Pediu contato em data"],["frio","Frio – reativar"]]},
   {title:"Follow-up pelo que travou (substitui a mensagem de Recebeu informações, Em conversa e Frio)", keys:OBJECOES.map(([k,t])=>["obj_"+k, t])},
   {title:"Roteiros de áudio (tópicos do que falar)", keys:[["rot_novo","Primeiro áudio (lead novo)"], ...OBJECOES.map(([k,t])=>["rot_"+k, t])]},
-  {title:"Pós-matrícula", keys:[["pos_d7","Boas-vindas (7 dias após a matrícula)"],["pos_boleto","1º boleto (3 dias antes do vencimento)"],["pos_d30","Primeiro mês (30 dias)"],["pos_d60","Pedido de indicação (60 dias)"],["pos_remat","Antes da rematrícula (10 dias antes da janela)"]]}
+  {title:"Pós-matrícula", keys:[["pos_d7","Boas-vindas (7 dias após a matrícula)"],["pos_boleto","1º boleto (3 dias antes do vencimento)"],["pos_inicio","Início das aulas (no dia)"],["pos_d30","Primeiro mês (30 dias após o início das aulas)"],["pos_d60","Pedido de indicação (60 dias)"],["pos_remat","Antes da rematrícula (10 dias antes da janela)"]]}
 ];
 
 let db = null, leads = [], tpl = {...DEFAULT_TPL}, equipe = ["Isabella"], rematJanelas = [], metas = {};
@@ -403,6 +405,7 @@ function meuNome(){
 
 /* ---------- pós-matrícula ---------- */
 function firstDue(l){
+  if(l.primeiroBoleto) return String(l.primeiroBoleto).slice(0,10);
   const dv = Number(l.diaVencimento); if(!dv || !l.dataMatricula) return null;
   const m = parse(l.dataMatricula);
   for(let i=0;i<3;i++){
@@ -425,7 +428,8 @@ function posDate(l, k){
   if(!l.dataMatricula) return null;
   if(k==="pos_d7") return addDays(l.dataMatricula,7);
   if(k==="pos_boleto"){ const f = firstDue(l); return f ? addDays(f,-3) : null; }
-  if(k==="pos_d30") return addDays(l.dataMatricula,30);
+  if(k==="pos_inicio") return l.inicioAulas ? String(l.inicioAulas).slice(0,10) : null;
+  if(k==="pos_d30") return addDays(l.inicioAulas || l.dataMatricula,30);
   if(k==="pos_d60") return addDays(l.dataMatricula,60);
   if(k==="pos_remat") return nextRemat(l);
 }
@@ -452,6 +456,7 @@ function fillTpl(l){
           .replaceAll("{responsavel}", firstName(l.responsavel || meuNome()) || "equipe")
           .replaceAll("{motivo}", l.pedidoMotivo || "para retomarmos a conversa sobre a matrícula")
           .replaceAll("{vencimento}", f ? br(f) : "breve")
+          .replaceAll("{inicio}", l.inicioAulas ? br(l.inicioAulas) : "em breve")
           .replaceAll("{resumo}", l.resumo || "");
 }
 const waLink = (l, text) => `https://wa.me/${phoneDigits(l.telefone)}?text=${encodeURIComponent(text)}`;
@@ -472,7 +477,7 @@ function status(l){
 function stageData(l, st, x){
   const s = STAGES[st], t = today(), d = {etapa:st, tentativas:0};
   if(st==="matriculado"){
-    Object.assign(d, {dataMatricula:x.dataMatricula, diaVencimento:x.diaVencimento, matriculadoEm:x.dataMatricula || l.matriculadoEm || t,
+    Object.assign(d, {dataMatricula:x.dataMatricula, diaVencimento:x.diaVencimento, primeiroBoleto:x.primeiroBoleto || null, inicioAulas:x.inicioAulas || null, matriculadoEm:x.dataMatricula || l.matriculadoEm || t,
       posFeitos:[], posSemResposta:0, risco:false, riscoAvisado:null});
     const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date;
   } else if(st==="negociando" && x && x.objecao){
@@ -487,7 +492,7 @@ function stageData(l, st, x){
 function stageHist(st, x){
   const s = STAGES[st];
   if(st==="agendado") return `pediu contato em ${brAno(x.pedidoData)}${x.pedidoMotivo?` (${x.pedidoMotivo})`:""}`;
-  if(st==="matriculado") return `matriculado em ${br(x.dataMatricula)}, boleto vence dia ${x.diaVencimento}`;
+  if(st==="matriculado") return x.primeiroBoleto ? `matriculado em ${br(x.dataMatricula)}, 1º boleto em ${brAno(x.primeiroBoleto)}${x.inicioAulas?`, aulas a partir de ${brAno(x.inicioAulas)}`:""}` : `matriculado em ${br(x.dataMatricula)}, boleto vence dia ${x.diaVencimento}`;
   if(s.motivo) return `${s.label}: ${x.motivoPerda}`;
   if(st==="negociando" && x && x.objecao) return `Em conversa · travou: ${objLabel(x.objecao)} · "${x.resumo}"`;
   return `mudou para ${s.label}`;
@@ -496,7 +501,8 @@ function extrasFields(st, prefix, l){
   const t = today();
   if(st==="matriculado") return `
     <label class="f">Data da matrícula*<input type="date" id="${prefix}mat" value="${esc(l && l.dataMatricula || t)}"></label>
-    <label class="f">Dia de vencimento do boleto*<input type="number" min="1" max="31" id="${prefix}venc" placeholder="Ex.: 10" value="${esc(l && l.diaVencimento || "")}"></label>`;
+    <label class="f">Vencimento do 1º boleto*<input type="date" id="${prefix}bol" value="${esc(l && l.primeiroBoleto || "")}"></label>
+    <label class="f">Início das aulas*<input type="date" id="${prefix}ini" value="${esc(l && l.inicioAulas || "")}"></label>`;
   if(st==="negociando") return `
     <label class="f">O que travou?*<select id="${prefix}obj"><option value="">Escolha…</option>${OBJECOES.map(([k,t])=>`<option value="${k}"${l && l.objecao===k ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
     <label class="f">Resumo da conversa* <span style="font-weight:400">(opcional se não respondeu)</span><input type="text" id="${prefix}res" maxlength="200" placeholder="Ex.: achou caro, pediu para ver parcelamento" value="${esc(l && l.resumo || "")}"></label>`;
@@ -509,9 +515,11 @@ function extrasFields(st, prefix, l){
 }
 function readExtras(st, prefix){
   const v = id => { const el = document.getElementById(prefix+id); return el ? el.value.trim() : ""; };
-  if(st==="matriculado"){ const venc = Number(v("venc")); const mat = v("mat");
-    if(!mat) return {err:"Informe a data da matrícula"}; if(!(venc>=1 && venc<=31)) return {err:"Informe o dia de vencimento (1 a 31)"};
-    return {dataMatricula:mat, diaVencimento:venc}; }
+  if(st==="matriculado"){ const mat = v("mat"), bol = v("bol"), ini = v("ini");
+    if(!mat) return {err:"Informe a data da matrícula"}; if(!bol) return {err:"Informe a data de vencimento do 1º boleto"};
+    if(bol < mat) return {err:"O 1º boleto não pode vencer antes da matrícula"};
+    if(!ini) return {err:"Informe a data de início das aulas"}; if(ini < mat) return {err:"O início das aulas não pode ser antes da matrícula"};
+    return {dataMatricula:mat, primeiroBoleto:bol, diaVencimento:Number(bol.slice(8,10)), inicioAulas:ini}; }
   if(st==="negociando"){ const o = v("obj"), r = v("res");
     if(!o) return {err:"Escolha o que travou"}; if(o!=="naorespondeu" && r.length < 5) return {err:"Escreva um resumo curto da conversa"};
     return {objecao:o, resumo:r}; }
@@ -538,6 +546,8 @@ function cardHTML(l){
   const hist = (l.historico||[]).slice(-4).reverse();
   const pills = [l.responsavel ? `<span class="pill owner" style="--c:var(--p${ownerColor(l.responsavel)})">${esc(l.responsavel)}</span>` : `<span class="pill muted">Sem vendedora</span>`,
     `<span class="pill stage">${esc(stage.label)}</span>`];
+  if(l.etapa==="matriculado" && !l.primeiroBoleto) pills.push(`<span class="pill risk">Falta data do 1º boleto</span>`);
+  if(l.etapa==="matriculado" && !l.inicioAulas) pills.push(`<span class="pill today">Falta início das aulas</span>`);
   if(l.risco) pills.push(`<span class="pill risk">${l.riscoAvisado ? "Em risco · Permanência avisada" : "Em risco · avisar Permanência"}</span>`);
   if(isPool(l) && l.filaDe) pills.push(`<span class="pill owner" style="--c:var(--p${ownerColor(l.filaDe)})">Fila: ${esc(l.filaDe)}</span>`);
   if(isPool(l) && l.chamandoEm===today() && l.chamandoPor) pills.push(`<span class="pill today">${l.chamandoPor===meuNome() ? "Você está chamando" : `${esc(firstName(l.chamandoPor))} está chamando`}</span>`);
@@ -549,7 +559,7 @@ function cardHTML(l){
   if(stage.motivo && l.motivoPerda) info.push(`<span><b>Motivo:</b> ${esc(l.motivoPerda)}</span>`);
   if(l.etapa==="matriculado"){
     const f = firstDue(l); const feitos = l.posFeitos || [];
-    info.push(`<span><b>Matrícula ${l.dataMatricula?br(l.dataMatricula):"sem data"}</b>${l.diaVencimento?` · boleto vence dia ${esc(l.diaVencimento)}`:""}${f?` · 1º boleto ${br(f)}`:""}</span>`);
+    info.push(`<span><b>Matrícula ${l.dataMatricula?br(l.dataMatricula):"sem data"}</b>${l.primeiroBoleto ? ` · <b>1º boleto ${brAno(l.primeiroBoleto)}</b>` : f ? ` · 1º boleto ${br(f)} <span style="color:var(--late);font-weight:600">(calculado, confira)</span>` : ""}${l.diaVencimento?` · demais no dia ${esc(l.diaVencimento)}`:""}${l.inicioAulas?` · <b>aulas a partir de ${brAno(l.inicioAulas)}</b>`:""}</span>`);
     info.push(`<div class="steps">${POS.map(p=>`<span class="step ${feitos.includes(p.k)?"done":p.k===l.posAtual?"now":""}">${esc(p.curto)}</span>`).join("")}</div>`);
   }
   if(l.obs) info.push(`<span>${esc(l.obs)}</span>`);
@@ -574,7 +584,8 @@ function cardHTML(l){
         <label class="f">Curso<input type="text" id="ed-curso-${id}" value="${esc(l.curso||"")}" placeholder="Ex.: Administração"></label>
         <label class="f">Indicado por (aluno)<input type="text" id="ed-ind-${id}" list="alunosList" autocomplete="off" value="${esc(l.indicadoPor||"")}"></label>
         <label class="f">Origem<select id="ed-origem-${id}"><option value="">Não sei ainda</option>${ORIGENS.map(o=>`<option${o===l.origem?" selected":""}>${esc(o)}</option>`).join("")}</select></label>
-        ${l.etapa==="matriculado"?`<label class="f">Dia de vencimento do boleto<input type="number" min="1" max="31" id="ed-venc-${id}" value="${esc(l.diaVencimento||"")}"></label>`:""}
+        ${l.etapa==="matriculado"?`<label class="f">Vencimento do 1º boleto<input type="date" id="ed-bol-${id}" value="${esc(l.primeiroBoleto || firstDue(l) || "")}"></label>
+        <label class="f">Início das aulas<input type="date" id="ed-ini-${id}" value="${esc(l.inicioAulas || "")}"></label>`:""}
       </div>
       <label class="f">Observações<textarea id="ed-obs-${id}">${esc(l.obs||"")}</textarea></label>
       <div class="row"><button class="btn primary" type="button" data-act="edit-ok">Salvar dados</button><button class="btn ghost" type="button" data-act="edit-no">Cancelar</button></div></div>` : "";
@@ -721,9 +732,10 @@ function render(){
       const r = todos.filter(l=>l.risco).length;
       list.innerHTML = `<p class="note">${todos.length} aluno(s) matriculado(s) · <b>${r} em risco</b>. Os em risco aparecem primeiro. Use <b>Assumi o caso</b> ao começar a tratar, e <b>Anotar</b> para registrar o combinado.</p>` + (todos.length ? todos.map(cardHTML).join("") : emptyHTML("Nenhum aluno matriculado ainda",""));
       return; }
-    const ord = alunos.slice().sort((x,y)=>(y.risco?1:0)-(x.risco?1:0) || String(x.proximo||"9").localeCompare(String(y.proximo||"9")));
-    list.innerHTML = ord.length ? ord.map(cardHTML).join("") :
-      emptyHTML("Nenhum aluno matriculado ainda","Quando um lead virar matrícula, mude a situação para <b>Matriculado</b> e informe o dia de vencimento do boleto. A régua de contatos começa sozinha.");
+    const ord = alunos.slice().sort((x,y)=>(y.risco?1:0)-(x.risco?1:0) || (x.primeiroBoleto?1:0)-(y.primeiroBoleto?1:0) || String(x.proximo||"9").localeCompare(String(y.proximo||"9")));
+    const semBol = alunos.filter(l=>!l.primeiroBoleto).length, semIni = alunos.filter(l=>!l.inicioAulas).length;
+    list.innerHTML = ord.length ? (semBol ? `<div class="warn"><span><b>${semBol} aluno(s) sem a data do 1º boleto.</b> O lembrete do boleto deles usa uma data calculada, que pode estar errada. Abra <b>Editar dados</b> em cada um e informe a data certa.</span></div>` : "") + (semIni ? `<p class="note">${semIni} aluno(s) sem data de início das aulas. Sem ela, a mensagem "suas aulas começam hoje" não é enviada.</p>` : "") + ord.map(cardHTML).join("") :
+      emptyHTML("Nenhum aluno matriculado ainda","Quando um lead virar matrícula, mude a situação para <b>Matriculado</b> e informe a data do 1º boleto. A régua de contatos começa sozinha.");
   } else {
     const q = busca.trim().toLowerCase(); const qd = q.replace(/\D/g,"");
     const all = mine().filter(l => (!filtroEtapa || l.etapa===filtroEtapa) && (!filtroOrigem || l.origem===filtroOrigem) &&
@@ -930,7 +942,7 @@ function exportarLeads(){
     "Situação":(STAGES[l.etapa]||{}).label||l.etapa, "Próximo contato":l.proximo?brAno(l.proximo):"", "Tentativas":l.tentativas||0,
     "Indicado por":l.indicadoPor||"", "O que travou":objLabel(l.objecao)||"", "Resumo da última conversa":l.resumo||"",
     "Pediu contato em":l.pedidoData?brAno(l.pedidoData):"", "Motivo do pedido":l.pedidoMotivo||"", "Motivo de perda":l.motivoPerda||"",
-    "Data da matrícula":l.dataMatricula?brAno(l.dataMatricula):"", "Dia de vencimento":l.diaVencimento||"", "1º boleto":f?brAno(f):"",
+    "Data da matrícula":l.dataMatricula?brAno(l.dataMatricula):"", "1º boleto":f?brAno(f):"", "1º boleto informado?":l.etapa==="matriculado"?(l.primeiroBoleto?"Sim":"Não (calculado)"):"", "Dia de vencimento":l.diaVencimento||"", "Início das aulas":l.inicioAulas?brAno(l.inicioAulas):"",
     "Pós-matrícula feitos":(l.posFeitos||[]).length, "Em risco":l.risco?"Sim":"", "Cadastrado em":l.criadoEm?brAno(l.criadoEm):"",
     "Último envio":l.ultimoEnvio?brAno(l.ultimoEnvio):"", "Observações":l.obs||"" }; });
   saveXlsx(`leads-polo-${today()}.xlsx`, rows, "Leads");
@@ -978,7 +990,7 @@ function renderConfig(force){
 /* ---------- importação ---------- */
 const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g," ").trim();
 const COLS = [
-  ["dataMatricula",["data matricula","data da matricula"]], ["diaVencimento",["vencimento","dia vencimento","dia de vencimento","dia do vencimento"]],
+  ["dataMatricula",["data matricula","data da matricula"]], ["inicioAulas",["inicio das aulas","inicio aulas","inicio","data de inicio"]], ["primeiroBoleto",["1o boleto","1º boleto","primeiro boleto","vencimento 1o boleto","vencimento do 1o boleto","data do 1o boleto"]], ["diaVencimento",["vencimento","dia vencimento","dia de vencimento","dia do vencimento"]],
   ["proximo",["proximo contato","proximo","retorno","data retorno","data de retorno"]], ["motivo",["motivo","motivo de perda","motivo perda"]],
   ["nome",["nome","nome completo","aluno","lead"]], ["telefone",["whatsapp","telefone","celular","fone","whats","contato"]],
   ["curso",["curso"]], ["responsavel",["vendedora","responsavel","consultora","vendedor"]], ["origem",["origem","canal"]],
@@ -1028,8 +1040,9 @@ function parseRows(rows, def){
     if(d0){ dup.push({linha, nome, com:`${d0.nome} (${d0.responsavel||"—"})`}); return; }
     if(vistos.has(k)){ dup.push({linha, nome, com:"repetido na planilha"}); return; } vistos.add(k);
     const st = stageFrom(g(r,"situacao")); const prox = dateFrom(g(r,"proximo")); const x = {};
-    if(st==="matriculado"){ x.dataMatricula = dateFrom(g(r,"dataMatricula")) || today(); x.diaVencimento = Number(String(g(r,"diaVencimento")).replace(/\D/g,""));
-      if(!(x.diaVencimento>=1 && x.diaVencimento<=31)){ bad.push({linha, nome, motivo:"matriculado sem dia de vencimento"}); return; } }
+    if(st==="matriculado"){ x.dataMatricula = dateFrom(g(r,"dataMatricula")) || today(); x.primeiroBoleto = dateFrom(g(r,"primeiroBoleto")); x.inicioAulas = dateFrom(g(r,"inicioAulas"));
+      x.diaVencimento = x.primeiroBoleto ? Number(x.primeiroBoleto.slice(8,10)) : Number(String(g(r,"diaVencimento")).replace(/\D/g,""));
+      if(!x.primeiroBoleto && !(x.diaVencimento>=1 && x.diaVencimento<=31)){ bad.push({linha, nome, motivo:"matriculado sem data do 1º boleto"}); return; } }
     if(st==="agendado"){ if(!prox){ bad.push({linha, nome, motivo:"pediu contato sem data no Próximo contato"}); return; } x.pedidoData = prox; x.pedidoMotivo = ""; }
     if(STAGES[st].motivo) x.motivoPerda = motivoFrom(g(r,"motivo"));
     const base = {nome, telefone:tel, curso:String(g(r,"curso")||"").trim(), responsavel:respFrom(g(r,"responsavel"), def),
@@ -1073,8 +1086,8 @@ document.getElementById("config").addEventListener("click", async e=>{
   const fail = () => toast("Não salvou. Verifique seu acesso.");
   const id = e.target.id;
   if(id==="btnModelo") saveXlsx("modelo-importacao-leads.xlsx", [
-    {"Nome":"Maria Souza","WhatsApp":"21 99999-0000","Curso":"Administração","Vendedora":equipe[0]||"","Origem":"Instagram","Situação":"Novo","Próximo contato":brAno(addDays(today(),1)),"Observações":"","Motivo":"","Data matrícula":"","Vencimento":""},
-    {"Nome":"João Lima","WhatsApp":"21 98888-0000","Curso":"Pedagogia","Vendedora":equipe[1]||equipe[0]||"","Origem":"Indicação","Situação":"Matriculado","Próximo contato":"","Observações":"","Motivo":"","Data matrícula":brAno(today()),"Vencimento":10}
+    {"Nome":"Maria Souza","WhatsApp":"21 99999-0000","Curso":"Administração","Vendedora":equipe[0]||"","Origem":"Instagram","Situação":"Novo","Próximo contato":brAno(addDays(today(),1)),"Observações":"","Motivo":"","Data matrícula":"","1º boleto":""},
+    {"Nome":"João Lima","WhatsApp":"21 98888-0000","Curso":"Pedagogia","Vendedora":equipe[1]||equipe[0]||"","Origem":"Indicação","Situação":"Matriculado","Próximo contato":"","Observações":"","Motivo":"","Data matrícula":brAno(today()),"1º boleto":brAno(addDays(today(),20)),"Início das aulas":brAno(addDays(today(),15))}
   ], "Leads");
   if(id==="btnConferir"){
     if(typeof XLSX==="undefined"){ toast("O leitor de planilha não carregou. Recarregue a página."); return; }
@@ -1386,8 +1399,14 @@ list.addEventListener("click", async e=>{
     const dp = findDup(tel, id); if(dp){ toast(dupTxt(dp)); return; }
     const ind = g("ind").value.trim();
     const d = {nome, telefone:tel, curso:g("curso").value.trim(), origem: ind && !g("origem").value ? "Indicação" : g("origem").value, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind)};
-    if(g("venc")){ const v = Number(g("venc").value); if(!(v>=1 && v<=31)){ toast("Dia de vencimento entre 1 e 31"); return; }
-      if(v!==Number(l.diaVencimento)){ d.diaVencimento = v; if(l.posAtual==="pos_boleto" || !(l.posFeitos||[]).includes("pos_boleto")){ const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date; } } }
+    if(g("bol")){ const b = g("bol").value;
+      if(!b){ toast("Informe a data do 1º boleto"); return; }
+      if(l.dataMatricula && b < l.dataMatricula){ toast("O 1º boleto não pode vencer antes da matrícula"); return; }
+      if(b!==l.primeiroBoleto){ d.primeiroBoleto = b; d.diaVencimento = Number(b.slice(8,10)); } }
+    if(g("ini")){ const ini = g("ini").value;
+      if(ini && l.dataMatricula && ini < l.dataMatricula){ toast("O início das aulas não pode ser antes da matrícula"); return; }
+      if((ini||null)!==(l.inicioAulas||null)) d.inicioAulas = ini || null; }
+    if(l.etapa==="matriculado" && (d.primeiroBoleto!==undefined || d.inicioAulas!==undefined)){ const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date; }
     drafts.delete(id);
     if(await patch(id, d, "dados atualizados")){ pendingEdit.delete(id); toast("Dados salvos"); }
   }
