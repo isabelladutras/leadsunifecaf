@@ -336,7 +336,7 @@ const OBJECOES = [["semtempo","Sem tempo agora, vai responder depois"],["convers
 const NAO_OBJECAO = ["semtempo","conversando","outro"];
 const OBJ_MENU = ["conversando","semtempo","preco","familia","curso","outro"];
 const objLabel = k => (OBJECOES.find(o=>o[0]===k)||[,""])[1];
-const CURSOS_PADRAO = ["Administração","Biomedicina","Ciências Contábeis","Educação Física (Bacharelado)","Educação Física (Licenciatura)","Estética e Cosmética","Farmácia","Fisioterapia","Gestão de Recursos Humanos","Marketing","Nutrição","Pedagogia","Psicopedagogia","Radiologia","Serviço Social","Terapia Ocupacional"];
+const CURSOS_PADRAO = ["Administração", "Adm Tech", "Análise e Desenvolvimento de Sistemas", "Arquitetura e Urbanismo", "Biomedicina", "Ciência de Dados", "Ciências Contábeis", "Computação em Nuvem", "Creator e Digital Influencer", "Design de Interiores", "Design Gráfico", "Educação Física (Bacharelado)", "Educação Física (Licenciatura)", "Engenharia Civil", "Engenharia de Computação", "Engenharia de Produção", "Engenharia Elétrica", "Estética e Cosmética", "Farmácia", "Fisioterapia", "Gestão Comercial", "Gestão da Tecnologia da Informação", "Gestão de Recursos Humanos", "Gestão de Segurança Privada", "Gestão de Segurança Pública", "Gestão do Agronegócio", "Gestão Financeira", "Gestão Pública", "Inteligência Artificial e Automação Digital", "Logística", "Marketing", "Marketing Digital", "Nutrição", "Pedagogia", "Processos Gerenciais", "Psicopedagogia", "Radiologia", "Segurança Cibernética", "Sistemas de Informação", "Terapia Ocupacional", "Pós-graduação"];
 let CURSOS = CURSOS_PADRAO.slice();
 function cursoSel(idBase, valor){
   const v = String(valor||"").trim(); const fora = v && !CURSOS.includes(v);
@@ -1217,7 +1217,7 @@ function renderConfig(force){
       <h3 class="sec">Cursos oferecidos</h3>
       <p class="tplhelp">Um curso por linha. É a lista que aparece para as meninas escolherem no cadastro.</p>
       <label class="f">Cursos<textarea id="cursosTxt" rows="8">${esc(CURSOS.join("\n"))}</textarea></label>
-      <div class="row"><button class="btn primary" type="button" id="saveCursos">Salvar cursos</button></div>
+      <div class="row"><button class="btn primary" type="button" id="saveCursos">Salvar cursos</button><button class="btn ghost" type="button" id="resetCursos">Voltar à lista padrão</button></div>
       ${Object.keys(foraLista).length ? `<p class="tplhelp" style="color:var(--ink);font-weight:600">Cursos digitados fora da lista</p><p class="tplhelp">Escolha o curso certo e clique em Corrigir: todos os leads com aquele texto são atualizados.</p>` +
         Object.entries(foraLista).sort((a,b)=>b[1]-a[1]).map(([c,n],i)=>`<div class="row"><span style="min-width:10rem">"${esc(c)}" · ${n} lead(s)</span><select id="mapc-${i}" data-de="${esc(c)}" style="width:auto"><option value="">Corrigir para…</option>${CURSOS.map(x=>`<option>${esc(x)}</option>`).join("")}</select><button class="btn" type="button" data-mapc="${i}">Corrigir</button></div>`).join("") : ""}
     </section>
@@ -1363,6 +1363,7 @@ document.getElementById("config").addEventListener("click", async e=>{
   if(mc){ const sel = document.getElementById("mapc-"+mc.dataset.mapc); const de = sel.dataset.de, para = sel.value; if(!para){ toast("Escolha o curso certo"); return; }
     mc.disabled = true; let n = 0; for(const l of leads.filter(x=>String(x.curso||"").trim()===de)){ try{ await db.collection("leads").doc(l.id).update({curso:para}); n++; }catch(err){ break; } }
     toast(`${n} lead(s) corrigidos para ${para}`); renderConfig(true); return; }
+  if(id==="resetCursos"){ document.getElementById("cursosTxt").value = CURSOS_PADRAO.join("\n"); toast("Lista padrão carregada. Clique em Salvar cursos para confirmar."); return; }
   if(id==="saveCursos"){ const lista = [...new Set(document.getElementById("cursosTxt").value.split("\n").map(x=>x.trim()).filter(Boolean))];
     if(!lista.length){ toast("Informe pelo menos um curso"); return; }
     try{ await db.doc("config/cursos").set({lista}); toast("Lista de cursos salva"); }catch(err){ fail(); } return; }
