@@ -90,6 +90,16 @@ button,select,input,textarea{font:inherit;color:inherit}
 .cday .cnt.today{background:var(--today-soft);color:var(--today)}
 @media (max-width:480px){.cday{min-height:46px;padding:4px}.cday .cnt{padding:1px 5px}}
 .tab .n{font-family:var(--f-mono);font-size:.75rem;margin-left:4px;opacity:.8}
+.tab .n.alerta{background:var(--late);color:#fff;opacity:1;border-radius:999px;padding:1px 7px;font-weight:700;animation:pulsa 1.6s ease-in-out infinite}
+@keyframes pulsa{0%,100%{box-shadow:0 0 0 0 rgba(179,38,30,.5)}50%{box-shadow:0 0 0 6px rgba(179,38,30,0)}}
+@media (prefers-reduced-motion:reduce){.tab .n.alerta{animation:none}}
+.rec-modal{position:fixed;inset:0;z-index:60;background:rgba(10,20,17,.62);display:grid;place-items:center;padding:16px;overflow:auto}
+.rec-modal[hidden]{display:none}
+.rec-box{background:var(--surface);color:var(--ink);border-radius:14px;width:100%;max-width:560px;max-height:calc(100vh - 32px);overflow:auto;padding:22px;border-top:6px solid var(--late);box-shadow:0 18px 50px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:12px}
+.rec-tag{font-size:.78rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--late)}
+.rec-box h2{margin:0;font-size:1.35rem;line-height:1.25}
+.rec-txt{white-space:pre-wrap;line-height:1.55;font-size:1rem}
+.rec-box .btn.primary{align-self:flex-start;font-size:1rem;padding:11px 18px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (max-width:560px){.grid2{grid-template-columns:1fr}}
@@ -289,6 +299,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
   <div id="inicio" class="list"></div>
   <div id="recados" class="list" hidden></div>
   <div id="zona"><div id="list" class="list"></div><div id="ficha" class="ficha" hidden></div></div>
+  <div id="recModal" class="rec-modal" role="dialog" aria-modal="true" aria-labelledby="recModalTit" hidden></div>
   <div id="campanha" class="list" hidden>
     <section class="panel">
       <h3 class="sec">Lista fria: novas ofertas</h3>
@@ -766,7 +777,8 @@ function render(){
     document.getElementById("nPool").textContent = vis.filter(l=>l.proximo && l.proximo<=t).length || ""; }
   document.getElementById("nAgenda").textContent = fut.length||"";
   document.getElementById("nPos").textContent = alunos.length||"";
-  document.getElementById("nRec").textContent = recadosNaoLidos().length||"";
+  { const nr = recadosNaoLidos().length; const el = document.getElementById("nRec"); el.textContent = nr||""; el.classList.toggle("alerta", nr>0); }
+  renderRecModal();
   document.getElementById("nFria").textContent = mine().filter(l=>l.etapa==="frio"||l.etapa==="perdido").length||"";
   document.getElementById("nTodos").textContent = mine().length||"";
 
@@ -924,6 +936,32 @@ function renderInicio(){
 let recados = [], lidos = {};
 const quemSou = () => meuNome() || userEmail || "";
 function recadosNaoLidos(){ const eu = quemSou(); if(!eu || podeGerir()) return []; return recados.filter(r=>!(lidos[r.id]||{})[eu]); }
+// Recado não lido aparece em destaque por cima de tudo, até a vendedora clicar em "Li e entendi".
+let recPrevia = null, recModalId = null;
+function renderRecModal(){
+  const m = document.getElementById("recModal"); if(!m) return;
+  const pend = recPrevia ? [recPrevia] : recadosNaoLidos().slice().sort((a,b)=>String(a.em||a.data).localeCompare(String(b.em||b.data)));
+  const r = pend[0];
+  if(!r){ m.hidden = true; m.innerHTML = ""; recModalId = null; document.body.style.overflow = ""; return; }
+  if(recModalId===r.id && !m.hidden) return;
+  recModalId = r.id; m.hidden = false; document.body.style.overflow = "hidden";
+  m.innerHTML = `<div class="rec-box">
+    <div class="rec-tag">📢 Recado${r.por?` da ${esc(firstName(r.por))}`:""} · ${brAno(r.data)}${pend.length>1?` · 1 de ${pend.length}`:""}</div>
+    <h2 id="recModalTit">${esc(r.titulo||"Recado importante")}</h2>
+    <div class="rec-txt">${esc(r.texto)}</div>
+    ${recPrevia ? `<p class="note">Prévia: é assim que as vendedoras veem o recado ao abrir o sistema, até clicarem em "Li e entendi".</p><button class="btn primary" type="button" id="recFecharPrevia">Fechar prévia</button>`
+      : `<button class="btn primary" type="button" data-reclido="${esc(r.id)}">Li e entendi</button>`}
+  </div>`;
+  const b = m.querySelector("button"); if(b) b.focus();
+}
+document.getElementById("recModal").addEventListener("click", async e=>{
+  if(e.target.id==="recFecharPrevia"){ recPrevia = null; renderRecModal(); return; }
+  const lido = e.target.closest("[data-reclido]"); if(!lido || !db) return;
+  lido.disabled = true; const eu = quemSou();
+  try{ await db.collection("lidos").doc(lido.dataset.reclido).set({[eu]: new Date().toISOString()}, {merge:true});
+    lidos[lido.dataset.reclido] = {...(lidos[lido.dataset.reclido]||{}), [eu]: new Date().toISOString()}; recModalId = null; renderRecModal(); render(); toast("Obrigada! 💚"); }
+  catch(err){ lido.disabled = false; toast("Não foi possível marcar. Avise a Isabella."); }
+});
 function renderRecados(){
   const el = document.getElementById("recados");
   if(el.contains(document.activeElement) && ["TEXTAREA","INPUT"].includes(document.activeElement.tagName)) return;
@@ -945,7 +983,7 @@ function renderRecados(){
           <div class="row" style="justify-content:space-between"><b style="font-size:1rem">${esc(r.titulo||"Recado")}</b><span class="note">${brAno(r.data)}${r.por?` · ${esc(r.por)}`:""}</span></div>
           <div style="white-space:pre-wrap;line-height:1.5">${esc(r.texto)}</div>
           ${adm ? `<p class="note"><b>Leram (${leram.length} de ${pessoas.length}):</b> ${leram.map(esc).join(", ") || "ninguém ainda"}${faltam.length?` · <b>Faltam:</b> ${faltam.map(esc).join(", ")}`:""}</p>
-            <div class="row"><button class="btn ghost danger" type="button" data-recdel="${esc(r.id)}">Apagar</button></div>`
+            <div class="row"><button class="btn" type="button" data-recprev="${esc(r.id)}">Ver como elas veem</button><button class="btn ghost danger" type="button" data-recdel="${esc(r.id)}">Apagar</button></div>`
           : li ? `<span class="note ok">Você marcou como lido.</span>` : `<div class="row"><button class="btn primary" type="button" data-reclido="${esc(r.id)}">Entendi</button></div>`}
         </div>`; }).join("") : `<p class="note">Nenhum recado ainda.${adm ? " Escreva o primeiro acima." : ""}</p>`}
     </section>
@@ -973,6 +1011,7 @@ document.getElementById("recados").addEventListener("click", async e=>{
   }
   const lido = e.target.closest("[data-reclido]");
   if(lido){ const eu = quemSou(); try{ await db.collection("lidos").doc(lido.dataset.reclido).set({[eu]: new Date().toISOString()}, {merge:true}); toast("Obrigada! 💚"); }catch(err){ toast("Não foi possível marcar. Avise a Isabella."); } }
+  const pv = e.target.closest("[data-recprev]"); if(pv){ recPrevia = recados.find(r=>r.id===pv.dataset.recprev) || null; renderRecModal(); return; }
   const del = e.target.closest("[data-recdel]");
   if(del){ try{ await db.doc("config/recados").set({itens: recados.filter(r=>r.id!==del.dataset.recdel)}); toast("Recado apagado"); }catch(err){ toast("Não foi possível apagar."); } }
 });
@@ -1586,17 +1625,24 @@ document.getElementById("equipeBox").addEventListener("click", async e=>{
 
 /* ---------- ações nos cards ---------- */
 const donaDe = l => l.responsavel || l.filaDe || "";
+let ultimoPatch = {};
+// Datas automáticas nunca caem no domingo (só se a vendedora escolher a data na mão).
+const semDomingo = d => d && parse(d).getDay()===0 ? addDays(d,1) : d;
+// Contatos de uma vendedora num dia; "hoje" inclui os atrasados, que também estão na lista de hoje.
+function cargaDia(quem, x, ignorar){ const t = today(); return leads.filter(o=>o.id!==ignorar && donaDe(o)===quem && o.proximo && (x===t ? o.proximo<=t : o.proximo===x)).length; }
 function diaLivre(quem, dia, ignorar){
-  if(!quem || !dia) return dia; let x = dia;
-  for(let i=0; i<120; i++){ if(leads.filter(o=>o.id!==ignorar && donaDe(o)===quem && o.proximo===x).length < LIMITE_DIA) return x; x = addDays(x,1); }
-  return dia;
+  let x = semDomingo(dia); if(!quem || !x) return x;
+  for(let i=0; i<120; i++){ if(cargaDia(quem, x, ignorar) < LIMITE_DIA) return x; x = semDomingo(addDays(x,1)); }
+  return semDomingo(dia);
 }
 async function patch(id, data, acao, opt){
   const l = leads.find(x=>x.id===id); if(!l) return false;
-  if(opt && opt.espalhar && typeof data.proximo==="string" && data.proximo>today()){
+  const manual = /^reagendado/.test(acao||"") || data.pedidoData!==undefined || (opt && opt.manual);
+  if(typeof data.proximo==="string" && data.proximo && !manual){
     const quem = data.responsavel || (data.responsavel===undefined && data.filaDe===undefined ? donaDe(l) : data.filaDe) || "";
-    data = {...data, proximo: diaLivre(quem, data.proximo, id)};
+    data = {...data, proximo: opt && opt.espalhar ? diaLivre(quem, maxDate(data.proximo, today()), id) : semDomingo(data.proximo)};
   }
+  ultimoPatch = data;
   const historico = [...(l.historico||[]), {data: today(), em: new Date().toISOString(), acao, por: meuNome() || userEmail || ""}].slice(-20);
   try{ await db.collection("leads").doc(id).update({...data, ...patchExtra, historico}); return true; }
   catch(e){ toast(e.code==="permission-denied" ? "Seu e-mail não tem permissão para editar. Fale com a Isabella." : "Não salvou. Tente de novo."); return false; }
@@ -1700,8 +1746,9 @@ list.addEventListener("click", async e=>{
     distRodando = true; e.target.disabled = true; let n = 0;
     for(const [i,l] of alvo.entries()){
       const nome = nomes[i % nomes.length];
-      if(!(await patch(l.id, {filaDe:nome}, `fila: ${nome}`))) break;
-      n++; e.target.textContent = `Distribuindo… ${n} de ${alvo.length}`;
+      const dt = {filaDe:nome}; if(l.proximo && l.etapa==="novo") dt.proximo = l.proximo;
+      if(!(await patch(l.id, dt, `fila: ${nome}`, {espalhar:true}))) break;
+      l.filaDe = nome; if(ultimoPatch.proximo) l.proximo = ultimoPatch.proximo; n++; e.target.textContent = `Distribuindo… ${n} de ${alvo.length}`;
     }
     distRodando = false; distAberto = false; toast(`${n} lead(s) distribuídos entre ${nomes.length} vendedora(s)`); render(); return;
   }
@@ -1893,7 +1940,9 @@ form.addEventListener("submit", async e=>{
     antigo: document.getElementById("fAntigo").checked, cicloInicio: today(), ciclos: 1
   };
   const d = stageData(base, st, x);
-  if(!needsExtras(st)){ const fd = document.getElementById("fData"); if(fd && fd.value) d.proximo = fd.value; }
+  { const fd = !needsExtras(st) && document.getElementById("fData");
+    if(fd && fd.value) d.proximo = fd.value;
+    else if(st!=="agendado" && d.proximo) d.proximo = st==="novo" ? diaLivre(base.responsavel, d.proximo) : semDomingo(d.proximo); }
   const lead = {...base, ...d, historico:[{data: today(), acao: `cadastrado · ${stageHist(st, x)}`}]};
   try{ await db.collection("leads").add(lead); form.reset(); form.hidden = true; dupOk = false; document.getElementById("dupWarn").hidden = true; toast(`${firstName(lead.nome) || "Lead"} cadastrado`); }
   catch(err){ toast(err.code==="permission-denied" ? "Seu e-mail não tem permissão para salvar. Fale com a Isabella." : err.code==="resource-exhausted" ? "Limite diário do plano gratuito atingido. Tente amanhã." : "Não salvou. Tente de novo."); }
@@ -1949,25 +1998,28 @@ async function migrarFluxo(){
 // Redistribui os retornos automáticos (sem resposta) de amanhã em diante: no máximo LIMITE_DIA por vendedora por dia.
 // Não mexe em datas pedidas pelo lead, conversas em andamento nem pós-matrícula.
 async function espalharAgenda(){
-  const t = today(), amanha = addDays(t,1);
-  const flex = l => l.etapa==="novo" || (l.etapa==="negociando" && !l.resumoEm && (l.tentativas||0)>0);
+  const t = today();
+  const flex = l => (l.etapa==="novo" || (l.etapa==="negociando" && !l.resumoEm && (l.tentativas||0)>0)) && l.proximo>=t && l.chamandoEm!==t;
   const quem = [...new Set(leads.map(donaDe).filter(Boolean))]; let movidos = 0;
   for(const q of quem){
-    const meus = leads.filter(l=>donaDe(l)===q && l.proximo && l.proximo>=amanha);
-    const cont = {}; for(const l of meus) cont[l.proximo] = (cont[l.proximo]||0)+1;
+    const meus = leads.filter(l=>donaDe(l)===q && l.proximo);
+    const dia0 = l => l.proximo<t ? t : l.proximo;
+    const cont = {}; for(const l of meus) cont[dia0(l)] = (cont[dia0(l)]||0)+1;
     const dias = Object.keys(cont).sort();
     for(const dia of dias){
-      if(cont[dia] <= LIMITE_DIA) continue;
-      const mov = meus.filter(l=>l.proximo===dia && flex(l)).sort((a,b)=>(b.tentativas||0)-(a.tentativas||0) || String(a.criadoEm||"").localeCompare(String(b.criadoEm||"")));
+      const domingo = parse(dia).getDay()===0;
+      if(!domingo && cont[dia] <= LIMITE_DIA) continue;
+      const mov = meus.filter(l=>l.proximo===dia && flex(l)).sort((a,b)=>(b.tentativas||0)-(a.tentativas||0) || String(b.criadoEm||"").localeCompare(String(a.criadoEm||"")));
       for(const l of mov){
-        if(cont[dia] <= LIMITE_DIA) break;
-        let x = addDays(dia,1); while((cont[x]||0) >= LIMITE_DIA) x = addDays(x,1);
+        if(!domingo && cont[dia] <= LIMITE_DIA) break;
+        let x = semDomingo(addDays(dia,1)); while((cont[x]||0) >= LIMITE_DIA) x = semDomingo(addDays(x,1));
         try{ await db.collection("leads").doc(l.id).update({proximo:x}); }catch(e){ return; }
         cont[dia]--; cont[x] = (cont[x]||0)+1; l.proximo = x; movidos++;
+        if(!dias.includes(x)){ dias.push(x); dias.sort(); }
       }
     }
   }
-  if(movidos) toast(`${movidos} retorno(s) redistribuídos: no máximo ${LIMITE_DIA} por vendedora por dia`);
+  if(movidos) toast(`${movidos} retorno(s) redistribuídos: no máximo ${LIMITE_DIA} por vendedora por dia, sem domingos`);
 }
 function semAcesso(){ const b = document.getElementById("banner"); b.hidden = false;
   b.textContent = "Seu e-mail ainda não está na equipe. Peça para a Isabella adicionar você na aba Equipe com este mesmo e-mail e depois recarregue a página."; }
