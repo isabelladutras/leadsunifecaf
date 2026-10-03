@@ -131,6 +131,12 @@ details.msg[open] summary{margin-bottom:8px}
 .hist li{font-variant-numeric:tabular-nums}
 .actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px dashed var(--line);padding-top:10px}
 .actions select{width:auto;padding:7px 8px;font-size:.85rem}
+details.mais{display:flex;flex-wrap:wrap;gap:8px}
+details.mais[open]{flex-basis:100%}
+details.mais>summary{list-style:none;cursor:pointer}
+details.mais>summary::-webkit-details-marker{display:none}
+details.mais[open]>summary{background:var(--bg)}
+.mais-box{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px;border:1px dashed var(--line);border-radius:8px}
 .stagebox{border:1px solid var(--accent);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .confirm{display:inline-flex;gap:6px;align-items:center;font-size:.85rem}
 .empty{text-align:center;padding:36px 16px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:12px}
@@ -214,6 +220,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
       <label class="f">Vendedora<select id="fResp"></select></label>
       <label class="f">Origem<select id="fOrigem"></select></label>
       <label class="f">Indicado por (aluno)<input type="text" id="fInd" list="alunosList" autocomplete="off" placeholder="Nome de quem indicou"></label>
+      <label class="row" style="font-size:.88rem;font-weight:600;align-self:end"><input type="checkbox" id="fAntigo"> Lead antigo (já falou com a gente há um tempo)</label>
       <label class="f">Situação<select id="fEtapa"></select></label>
     </div>
     <div class="grid2" id="fExtras"></div>
@@ -238,6 +245,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
   <nav class="tabs" role="tablist" aria-label="Menu">
     <div class="tgroup"><span class="tlabel">Atendimento</span>
       <button class="tab" role="tab" data-tab="inicio" aria-selected="true">Início</button>
+      <button class="tab" role="tab" data-tab="recados" aria-selected="false">Recados e guia<span class="n" id="nRec"></span></button>
       <button class="tab" role="tab" data-tab="hoje" aria-selected="false">Chamar hoje<span class="n" id="nHoje"></span></button>
       <button class="tab" role="tab" data-tab="semdona" aria-selected="false">Sem vendedora<span class="n" id="nPool"></span></button>
       <button class="tab" role="tab" data-tab="agenda" aria-selected="false">Agenda<span class="n" id="nAgenda"></span></button>
@@ -245,7 +253,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
       <button class="tab" role="tab" data-tab="todos" aria-selected="false">Todos<span class="n" id="nTodos"></span></button>
     </div>
     <div class="tgroup"><span class="tlabel">Gestão</span>
-      <button class="tab" role="tab" data-tab="campanhas" aria-selected="false">Campanhas</button>
+      <button class="tab" role="tab" data-tab="campanhas" aria-selected="false">Lista fria<span class="n" id="nFria"></span></button>
       <button class="tab" role="tab" data-tab="numeros" aria-selected="false">Números</button>
       <button class="tab adm" role="tab" data-tab="equipe" aria-selected="false" hidden>Equipe</button>
       <button class="tab adm" role="tab" data-tab="config" aria-selected="false" hidden>Configurações</button>
@@ -259,18 +267,20 @@ input[type=file]{font-size:.88rem;max-width:100%}
   </div>
 
   <div id="inicio" class="list"></div>
+  <div id="recados" class="list" hidden></div>
   <div id="list" class="list"></div>
   <div id="campanha" class="list" hidden>
     <section class="panel">
-      <h3 class="sec">Campanha para leads perdidos e frios</h3>
+      <h3 class="sec">Lista fria: novas ofertas</h3>
+      <p class="tplhelp">Aqui ficam os leads que pararam de responder ou desistiram. Escreva a oferta, filtre pelo motivo e mande um por um pelo WhatsApp. Quem responder volta para <b>Em atendimento</b>.</p>
       <div class="grid2">
         <label class="f">Nome da campanha<input type="text" id="campNome" placeholder="Ex.: Condição de outubro"></label>
-        <label class="f">Perdidos nos últimos<select id="campDias"><option value="30">30 dias</option><option value="90" selected>90 dias</option><option value="180">180 dias</option><option value="tudo">Qualquer data</option></select></label>
+        <label class="f">Entraram na lista fria nos últimos<select id="campDias"><option value="30">30 dias</option><option value="90">90 dias</option><option value="180">180 dias</option><option value="tudo" selected>Qualquer data</option></select></label>
       </div>
       <div class="chips" id="campSit"></div>
       <div class="chips" id="campMot"></div>
       <label class="f">Mensagem<textarea id="campMsg"></textarea></label>
-      <p class="tplhelp">Use <code>{nome}</code>, <code>{curso}</code> e <code>{responsavel}</code>. O filtro de motivo vale só para Perdidos. Quem está como "Não quer contato" nunca entra em campanha.</p>
+      <p class="tplhelp">Use <code>{nome}</code>, <code>{curso}</code> e <code>{responsavel}</code>.  Quem está como "Não quer contato" nunca entra em campanha.</p>
     </section>
     <p class="note" id="campResumo"></p>
     <div id="campList" class="list"></div>
@@ -291,28 +301,25 @@ input[type=file]{font-size:.88rem;max-width:100%}
 <script>
 /* ---------- regras ---------- */
 const MAX_TENT = 3, RETRY_DIAS = 2, META_PADRAO = 30;
+const LONGO_DIAS = 15, CICLO_DIAS = 150, MAX_CICLOS = 2;   // depois de 3 tentativas: a cada 15 dias; 5 meses por vendedora; 2 vendedoras antes da lista fria
 const STAGES = {
-  novo:        {label:"Novo – sem resposta",   dias:1,  tpl:"novo",       retry:true, hint:"chamar no dia seguinte"},
-  informado:   {label:"Recebeu informações",   dias:1,  tpl:"informado",  retry:true, hint:"chamar no dia seguinte"},
-  negociando:  {label:"Em conversa",           dias:3,  tpl:"negociando", retry:true, hint:"retomar em 3 dias"},
-  agendado:    {label:"Pediu contato em data", dias:null, tpl:"agendado", retry:true, hint:"volta na data pedida"},
-  frio:        {label:"Frio – reativar",       dias:30, tpl:"frio",       hint:"reativar em 30 dias"},
-  matriculado: {label:"Matriculado",           dias:null, pos:true,       hint:"régua pós-matrícula"},
-  perdido:     {label:"Perdido",               dias:null, motivo:true,    hint:"sai da fila"},
-  naoquer:     {label:"Não quer contato",      dias:null, motivo:true,    hint:"nunca mais entra na fila"}
+  novo:        {label:"Ainda não respondeu",        dias:1,  tpl:"novo",       retry:true, hint:"lead novo, ninguém conversou ainda", grupo:"semresp"},
+  negociando:  {label:"Em atendimento",             dias:3,  tpl:"negociando", retry:true, hint:"o lead respondeu e está conversando", grupo:"atend"},
+  informado:   {label:"Em atendimento",             dias:1,  tpl:"informado",  retry:true, hint:"o lead respondeu e está conversando", grupo:"atend", oculto:true},
+  agendado:    {label:"Pediu para chamar depois",   dias:null, tpl:"agendado", retry:true, hint:"volta sozinho na data pedida", grupo:"agendado"},
+  frio:        {label:"Lista fria",                 dias:null, tpl:"frio", motivo:true, hint:"parou de responder ou desistiu; recebe novas ofertas", grupo:"fria"},
+  matriculado: {label:"Matriculado",                dias:null, pos:true,       hint:"virou aluno", grupo:"mat"},
+  perdido:     {label:"Lista fria",                 dias:null, motivo:true, hint:"parou de responder ou desistiu; recebe novas ofertas", grupo:"fria", oculto:true},
+  naoquer:     {label:"Pediu para não ser chamado", dias:null, motivo:true,    hint:"nunca mais entra na fila", grupo:"fim"}
 };
 const OBJECOES = [["semtempo","Sem tempo agora, vai responder depois"],["conversando","Conversa andando bem, sem objeção"],["preco","Preço / valor"],["horario","Horário / falta de tempo"],["familia","Vai decidir com a família"],["curso","Dúvida sobre o curso ou diploma"],["documentos","Documentação / processo"],["sumiu","Sumiu sem dar motivo"],["naorespondeu","Não respondeu"],["outro","Outro (escrevo no resumo)"]];
 const NAO_OBJECAO = ["semtempo","conversando","outro"];
+const OBJ_MENU = ["conversando","semtempo","preco","familia","curso","outro"];
 const objLabel = k => (OBJECOES.find(o=>o[0]===k)||[,""])[1];
 const ORIGENS = ["Instagram","WhatsApp direto","Indicação","Site / Google","Panfleto / evento","Passou no polo","Outro"];
-const MOTIVOS = ["Preço","Horário / falta de tempo","Desistiu de estudar agora","Foi para outra faculdade","Nunca respondeu","Outro"];
+const MOTIVOS = ["Parou de responder","Preço","Sem tempo / horário","Desistiu de estudar agora","Foi para outra faculdade","Outro"];
 const POS = [
-  {k:"pos_d7",     label:"Boas-vindas",   curto:"7 dias"},
-  {k:"pos_boleto", label:"1º boleto",     curto:"1º boleto"},
-  {k:"pos_inicio", label:"Início das aulas", curto:"Início"},
-  {k:"pos_d30",    label:"Primeiro mês",  curto:"30 dias"},
-  {k:"pos_d60",    label:"Indicação",     curto:"60 dias"},
-  {k:"pos_remat",  label:"Rematrícula",   curto:"Rematrícula"}
+  {k:"pos_d7", label:"Contato de 7 dias", curto:"7 dias"}
 ];
 const DEFAULT_TPL = {
   novo: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Posso te enviar alguns áudios explicando sobre a faculdade e os valores?",
@@ -326,6 +333,9 @@ const DEFAULT_TPL = {
   obj_curso: "Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?",
   obj_documentos: "Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?",
   obj_sumiu: "Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?",
+  antigo: "Oi! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Há um tempo você conversou com a gente sobre fazer faculdade. Ainda tem interesse? Estamos com condições novas de matrícula e posso te passar tudo rapidinho. 😊",
+  reapresentacao: "Oi! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Agora sou eu quem vai te acompanhar por aqui. Você ainda pensa em fazer faculdade? Posso te mandar as condições deste mês?",
+  rot_antigo: "• Se apresente: seu nome e que é do polo UniFECAF\n• Diga que a pessoa conversou com o polo há um tempo (sem cobrar)\n• Pergunte se ainda tem interesse e qual curso\n• Ofereça mandar as condições do mês em um áudio curto",
   obj_semtempo: "Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊",
   obj_conversando: "Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?",
   obj_outro: "Oi, {nome}! Tudo bem? Passando para retomarmos nossa conversa sobre o curso de {curso}. Posso te ajudar com algo?",
@@ -341,7 +351,7 @@ const DEFAULT_TPL = {
   rot_documentos: "• Mande a lista de documentos do curso\n• Explique que o envio é por foto, aqui mesmo\n• Ofereça ajuda com o que estiver faltando\n• Combine um prazo: \"consegue me mandar até amanhã?\"",
   rot_sumiu: "• Áudio curto (menos de 30 segundos), tom leve, sem cobrança\n• Lembre em uma frase o que vocês conversaram\n• Traga uma novidade (condição, prazo de início das aulas)\n• Pergunte se ainda faz sentido ou se prefere retomar mais para frente",
   rot_naorespondeu: "• Áudio de até 1 minuto resumindo o principal: curso, formato e valor\n• Uma pergunta simples no final, de sim ou não\n• Evite mandar muitas mensagens seguidas",
-  pos_d7: "Oi, {nome}! Já faz uma semana da sua matrícula no curso de {curso}. Está tudo certo com o acesso ao portal e às aulas? Qualquer dúvida, é só me chamar aqui.",
+  pos_semana: "Oi, {nome}! Conseguiu contato com o nosso suporte? Já está assistindo às suas aulas? Lembrando: qualquer dúvida, nós estamos por aqui. 😊",
   pos_boleto: "Oi, {nome}! Passando para lembrar que o seu primeiro boleto vence em {vencimento}. Se precisar da 2ª via ou tiver alguma dúvida, é só me chamar aqui.",
   pos_inicio: "Oi, {nome}! Suas aulas do curso de {curso} começam hoje! 🎉 Qualquer dúvida sobre o portal, as aulas ou os encontros no polo, estamos por aqui. Bons estudos!",
   pos_d30: "Oi, {nome}! Já completou um mês de aulas. Como está sendo o curso de {curso}? Está conseguindo acompanhar as aulas e o portal?",
@@ -349,16 +359,17 @@ const DEFAULT_TPL = {
   pos_remat: "Oi, {nome}! A rematrícula do próximo semestre está chegando. Quer que eu te ajude a garantir a sua vaga no curso de {curso}?"
 };
 const TPL_GROUPS = [
-  {title:"Leads", keys:[["novo","Novo – sem resposta"],["informado","Recebeu informações"],["negociando","Em conversa"],["agendado","Pediu contato em data"],["frio","Frio – reativar"]]},
+  {title:"Leads", keys:[["novo","Ainda não respondeu"],["negociando","Em atendimento (quando não há conversa registrada)"],["agendado","Pediu para chamar depois"],["frio","Parou de responder (nova tentativa após 30 dias)"]]},
   {title:"Follow-up pelo que travou (substitui a mensagem de Recebeu informações, Em conversa e Frio)", keys:OBJECOES.map(([k,t])=>["obj_"+k, t])},
   {title:"Roteiros de áudio (tópicos do que falar)", keys:[["rot_novo","Primeiro áudio (lead novo)"], ...OBJECOES.map(([k,t])=>["rot_"+k, t])]},
-  {title:"Pós-matrícula", keys:[["pos_d7","Boas-vindas (7 dias após a matrícula)"],["pos_boleto","1º boleto (3 dias antes do vencimento)"],["pos_inicio","Início das aulas (no dia)"],["pos_d30","Primeiro mês (30 dias após o início das aulas)"],["pos_d60","Pedido de indicação (60 dias)"],["pos_remat","Antes da rematrícula (10 dias antes da janela)"]]}
+  {title:"Apresentação", keys:[["antigo","Lead antigo (não sabemos nada dele)"],["reapresentacao","Lead passado para outra vendedora depois de 5 meses sem resposta"],["rot_antigo","Roteiro do áudio para lead antigo"]]},
+  {title:"Pós-matrícula (única mensagem do comercial)", keys:[["pos_semana","7 dias após o início das aulas (ou da matrícula, se o início não foi informado)"]]}
 ];
 
 let db = null, leads = [], tpl = {...DEFAULT_TPL}, equipe = ["Isabella"], rematJanelas = [], metas = {};
 let dupOk = false, impText = "", impParsed = null, importing = false;
 const CAMP_DEFAULT = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Abrimos uma condição especial de matrícula para o curso de {curso} e lembrei de você. Quer que eu te passe os detalhes?";
-const campSit = new Set(["perdido","frio"]), campMot = new Set();
+const campSit = new Set(["frio","perdido"]), campMot = new Set();
 let agMes = "", agDia = "";
 let tab = "inicio", resp = "todas", busca = "", filtroEtapa = "", filtroOrigem = "", periodo = "mes";
 const pendingPegar = new Set(), pendingCtxOnly = new Set();
@@ -440,7 +451,7 @@ function nextRemat(l){
 }
 function posDate(l, k){
   if(!l.dataMatricula) return null;
-  if(k==="pos_d7") return addDays(l.dataMatricula,7);
+  if(k==="pos_d7") return addDays(l.inicioAulas || l.dataMatricula,7);
   if(k==="pos_boleto"){ const f = firstDue(l); return f ? addDays(f,-3) : null; }
   if(k==="pos_inicio") return l.inicioAulas ? String(l.inicioAulas).slice(0,10) : null;
   if(k==="pos_d30") return addDays(l.inicioAulas || l.dataMatricula,30);
@@ -457,10 +468,13 @@ function nextPos(l){
 function rotKey(l){
   if(["matriculado","perdido","naoquer"].includes(l.etapa)) return null;
   if(l.objecao && tpl["rot_"+l.objecao]) return "rot_"+l.objecao;
+  if(l.etapa==="novo" && (l.antigo || l.reapresentar) && tpl.rot_antigo) return "rot_antigo";
   if(["novo","informado"].includes(l.etapa) && tpl.rot_novo) return "rot_novo";
   return null;
 }
-function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual || null;
+function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual==="pos_d7" ? "pos_semana" : null;
+  if(l.etapa==="novo" && (l.tentativas||0)===0 && l.reapresentar) return "reapresentacao";
+  if(l.etapa==="novo" && (l.tentativas||0)===0 && l.antigo) return "antigo";
   if(["informado","negociando","frio"].includes(l.etapa) && l.objecao && tpl["obj_"+l.objecao]) return "obj_"+l.objecao; const s = STAGES[l.etapa]; return s && s.tpl || null; }
 function fillTpl(l){
   const k = tplKey(l); const t = k ? (tpl[k] || "") : "";
@@ -495,7 +509,7 @@ function stageData(l, st, x){
       posFeitos:[], posSemResposta:0, risco:false, riscoAvisado:null});
     const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date;
   } else if(st==="negociando" && x && x.objecao){
-    Object.assign(d, {objecao:x.objecao, resumo:x.resumo, resumoEm:t, resumoPor:meuNome()||userEmail, proximo:addDays(t, x.prox!=null ? x.prox : s.dias)});
+    Object.assign(d, {objecao:x.objecao, resumo:x.resumo, resumoEm:t, resumoPor:meuNome()||userEmail, proximo:addDays(t, x.prox!=null ? x.prox : s.dias), cicloInicio:t, ciclos:1, reapresentar:false});
   } else if(st==="agendado"){
     Object.assign(d, {pedidoData:x.pedidoData, pedidoMotivo:x.pedidoMotivo || "", proximo:x.pedidoData});
   } else if(s.motivo){
@@ -518,14 +532,14 @@ function extrasFields(st, prefix, l){
     <label class="f">Vencimento do 1º boleto*<input type="date" id="${prefix}bol" value="${esc(l && l.primeiroBoleto || "")}"></label>
     <label class="f">Início das aulas*<input type="date" id="${prefix}ini" value="${esc(l && l.inicioAulas || "")}"></label>`;
   if(st==="negociando") return `
-    <label class="f">Como está a conversa?*<select id="${prefix}obj"><option value="">Escolha…</option>${OBJECOES.map(([k,t])=>`<option value="${k}"${l && l.objecao===k ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+    <label class="f">Como está a conversa?*<select id="${prefix}obj"><option value="">Escolha…</option>${OBJECOES.filter(([k])=>OBJ_MENU.includes(k) || (l && l.objecao===k)).sort((a,b)=>OBJ_MENU.indexOf(a[0])-OBJ_MENU.indexOf(b[0])).map(([k,t])=>`<option value="${k}"${l && l.objecao===k ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
     <label class="f">Chamar de novo<select id="${prefix}prox"><option value="0">Hoje mais tarde</option><option value="1">Amanhã</option><option value="2">Em 2 dias</option><option value="3" selected>Em 3 dias</option><option value="7">Em 7 dias</option></select></label>
     <label class="f" style="grid-column:1/-1">Como foi a conversa <span style="font-weight:400">(escreva do seu jeito)</span><textarea id="${prefix}res" maxlength="400" rows="2" placeholder="Ex.: estava no trabalho, disse que me chama à noite; achou caro e pediu para ver parcelamento">${esc(l && l.resumo || "")}</textarea></label>`;
   if(st==="agendado") return `
     <label class="f">Chamar em*<input type="date" id="${prefix}ped" min="${t}"></label>
     <label class="f">Motivo do pedido<input type="text" id="${prefix}pmot" placeholder="Ex.: para ver a matrícula de fevereiro"></label>`;
   if(STAGES[st].motivo) return `
-    <label class="f">Motivo*<select id="${prefix}mot"><option value="">Escolha…</option>${MOTIVOS.map(m=>`<option>${esc(m)}</option>`).join("")}</select></label>`;
+    <label class="f">Por que foi para a ${st==="naoquer" ? "lista de não chamar" : "lista fria"}?<select id="${prefix}mot">${MOTIVOS.map(m=>`<option${m===(l && l.motivoPerda || "Parou de responder")?" selected":""}>${esc(m)}</option>`).join("")}</select></label>`;
   return "";
 }
 function readExtras(st, prefix){
@@ -566,7 +580,9 @@ function cardHTML(l){
   if(l.risco) pills.push(`<span class="pill risk">${l.riscoAvisado ? "Em risco · Permanência avisada" : "Em risco · avisar Permanência"}</span>`);
   if(isPool(l) && l.filaDe) pills.push(`<span class="pill owner" style="--c:var(--p${ownerColor(l.filaDe)})">Fila: ${esc(l.filaDe)}</span>`);
   if(isPool(l) && l.chamandoEm===today() && l.chamandoPor) pills.push(`<span class="pill today">${l.chamandoPor===meuNome() ? "Você está chamando" : `${esc(firstName(l.chamandoPor))} está chamando`}</span>`);
-  if(stage.retry && l.tentativas) pills.push(`<span class="pill muted">Tentativa ${l.tentativas} de ${MAX_TENT}</span>`);
+  if(l.antigo && l.etapa==="novo") pills.push(`<span class="pill muted">Lead antigo</span>`);
+  if(l.reapresentar && l.etapa==="novo") pills.push(`<span class="pill muted">Veio de outra vendedora</span>`);
+  if(stage.retry && l.tentativas) pills.push(`<span class="pill muted">${l.tentativas<=MAX_TENT ? `Tentativa ${l.tentativas} de ${MAX_TENT}` : `${l.tentativas} tentativas · de 15 em 15 dias`}</span>`);
   pills.push(`<span class="pill ${st.cls}">${esc(st.txt)}</span>`);
 
   let info = [];
@@ -586,8 +602,9 @@ function cardHTML(l){
       <div class="grid2">${extrasFields(ps, `x-${id}-`, l)}</div>
       <div class="row"><button class="btn primary" type="button" data-act="stage-ok">Confirmar</button><button class="btn ghost" type="button" data-act="stage-no">Cancelar</button></div></div>` : "";
 
-  const respondBtn = isPool(l) ? `<button class="btn" type="button" data-act="pegar" style="border-color:var(--accent);color:var(--accent)">Respondeu: é minha</button>` : l.etapa==="matriculado" ? (l.posSemResposta ? `<button class="btn" type="button" data-act="respondeu">Aluno respondeu</button>` : "")
-    : (stage.retry || l.etapa==="frio") ? `<button class="btn" type="button" data-act="respondeu">Respondeu</button>` : "";
+  const respondBtn = isPool(l) ? `<button class="btn" type="button" data-act="pegar" style="border-color:var(--accent);color:var(--accent)">Respondeu: é minha</button>` : l.etapa==="matriculado" ? (!l.risco && !isPerm() ? `<button class="btn ghost danger" type="button" data-act="risco">Aluno com problema: avisar Permanência</button>` : "")
+    : l.etapa==="negociando" || l.etapa==="informado" ? (isPerm() ? "" : `<button class="btn" type="button" data-act="ctx" style="border-color:var(--accent);color:var(--accent)">Registrar conversa</button>`)
+    : (stage.retry || l.etapa==="frio" || l.etapa==="perdido") ? `<button class="btn" type="button" data-act="respondeu" style="border-color:var(--accent);color:var(--accent)">Respondeu</button>` : "";
 
   const dateBox = pendingDate.has(l.id) ? `<div class="stagebox"><b>Reagendar para</b>
       <div class="grid2"><label class="f">Data do próximo contato<input type="date" id="rd-${id}" min="${today()}" value="${esc(l.proximo && l.proximo>=today() ? l.proximo : today())}"></label></div>
@@ -598,6 +615,7 @@ function cardHTML(l){
         <label class="f">WhatsApp*<input type="tel" id="ed-tel-${id}" value="${esc(l.telefone)}"></label>
         <label class="f">Curso<input type="text" id="ed-curso-${id}" value="${esc(l.curso||"")}" placeholder="Ex.: Administração"></label>
         <label class="f">Indicado por (aluno)<input type="text" id="ed-ind-${id}" list="alunosList" autocomplete="off" value="${esc(l.indicadoPor||"")}"></label>
+        <label class="row" style="font-size:.88rem;font-weight:600;align-self:end"><input type="checkbox" id="ed-antigo-${id}"${l.antigo?" checked":""}> Lead antigo</label>
         <label class="f">Origem<select id="ed-origem-${id}"><option value="">Não sei ainda</option>${ORIGENS.map(o=>`<option${o===l.origem?" selected":""}>${esc(o)}</option>`).join("")}</select></label>
         ${l.etapa==="matriculado"?`<label class="f">Vencimento do 1º boleto<input type="date" id="ed-bol-${id}" value="${esc(l.primeiroBoleto || firstDue(l) || "")}"></label>
         <label class="f">Início das aulas<input type="date" id="ed-ini-${id}" value="${esc(l.inicioAulas || "")}"></label>`:""}
@@ -626,9 +644,10 @@ function cardHTML(l){
       (l.etapa!=="naoquer"?`<a class="btn" href="${esc(`https://wa.me/${phoneDigits(l.telefone)}`)}" target="_blank" rel="noopener">WhatsApp</a>`:"")}
       ${respondBtn}
       ${l.risco && !l.riscoAvisado ? `<button class="btn danger" type="button" data-act="avisei">${isPerm() ? "Assumi o caso" : "Avisei a Permanência"}</button>` : ""}
-      ${isPerm() ? "" : `<select data-act="etapa" id="etapa-${id}" aria-label="Mudar situação">
+      ${isPerm() ? `<button class="btn ghost" type="button" data-act="nota">Anotar</button>` : `<details class="mais"><summary class="btn ghost">Mais opções</summary><div class="mais-box">
+      <select data-act="etapa" id="etapa-${id}" aria-label="Mudar situação">
         <option value="">Mudar situação…</option>
-        ${Object.entries(STAGES).filter(([k])=>k!==l.etapa).map(([k,s])=>`<option value="${k}">${esc(s.label)}</option>`).join("")}
+        ${Object.entries(STAGES).filter(([k,x])=>k!==l.etapa && !x.oculto).map(([k,s])=>`<option value="${k}">${esc(s.label)}</option>`).join("")}
       </select>
       ${l.etapa!=="naoquer"?`<select data-act="adiar" id="adiar-${id}" aria-label="Reagendar">
         <option value="">Reagendar…</option><option value="0">Hoje</option><option value="1">Amanhã</option><option value="3">Em 3 dias</option><option value="7">Em 7 dias</option><option value="d">Escolher data…</option><option value="x">Tirar da agenda</option>
@@ -637,13 +656,12 @@ function cardHTML(l){
         <option value="">Passar para…</option>
         ${equipe.filter(n=>n!==l.responsavel).map(n=>`<option>${esc(n)}</option>`).join("")}
       </select>
-      `}
-      ${["informado","negociando","frio"].includes(l.etapa) && l.responsavel && !isPerm() ? `<button class="btn ghost" type="button" data-act="ctx">Registrar conversa</button>` : ""}
       <button class="btn ghost" type="button" data-act="nota">Anotar</button>
-      ${isPerm() ? "" : `<button class="btn ghost" type="button" data-act="edit">${faltam.length?`Completar dados (${faltam.join(", ")})`:"Editar dados"}</button>
+      <button class="btn ghost" type="button" data-act="edit">${faltam.length?`Completar dados (${faltam.join(", ")})`:"Editar dados"}</button>
       ${confirmDel.has(l.id)
         ? `<span class="confirm">Excluir mesmo? <button class="btn danger" type="button" data-act="del-ok">Excluir</button><button class="btn ghost" type="button" data-act="del-no">Não</button></span>`
-        : `<button class="btn ghost danger" type="button" data-act="del">Excluir</button>`}`}
+        : `<button class="btn ghost danger" type="button" data-act="del">Excluir</button>`}
+      </div></details>`}
     </div>
     ${hist.length?`<ul class="hist">${hist.map(h=>`<li>${br(h.data)} · ${esc(h.acao)}${h.por?` <span style="opacity:.8">(${esc(h.por)})</span>`:""}</li>`).join("")}</ul>`:""}
   </article>`;
@@ -677,14 +695,17 @@ function render(){
     document.getElementById("nPool").textContent = vis.filter(l=>l.proximo && l.proximo<=t).length || ""; }
   document.getElementById("nAgenda").textContent = fut.length||"";
   document.getElementById("nPos").textContent = alunos.length||"";
+  document.getElementById("nRec").textContent = recadosNaoLidos().length||"";
+  document.getElementById("nFria").textContent = mine().filter(l=>l.etapa==="frio"||l.etapa==="perdido").length||"";
   document.getElementById("nTodos").textContent = mine().length||"";
 
   const list = document.getElementById("list"), num = document.getElementById("numeros"), cfg = document.getElementById("config"), camp = document.getElementById("campanha");
-  list.hidden = ["config","numeros","campanhas","equipe","inicio"].includes(tab); document.getElementById("inicio").hidden = tab!=="inicio"; document.getElementById("equipeBox").hidden = tab!=="equipe"; num.hidden = tab!=="numeros"; cfg.hidden = tab!=="config"; camp.hidden = tab!=="campanhas";
+  list.hidden = ["config","numeros","campanhas","equipe","inicio","recados"].includes(tab); document.getElementById("inicio").hidden = tab!=="inicio"; document.getElementById("recados").hidden = tab!=="recados"; document.getElementById("equipeBox").hidden = tab!=="equipe"; num.hidden = tab!=="numeros"; cfg.hidden = tab!=="config"; camp.hidden = tab!=="campanhas";
   document.getElementById("filtros").hidden = tab!=="todos";
   if(tab==="config"){ renderConfig(); return; }
   if(tab==="campanhas"){ renderCampList(); return; }
   if(tab==="inicio"){ renderInicio(); return; }
+  if(tab==="recados"){ renderRecados(); return; }
   if(tab==="equipe"){ renderEquipe(); return; }
   if(tab==="numeros"){ renderNumeros(); return; }
   if(!db){ list.innerHTML = emptyHTML("Conectando…","Carregando os leads da equipe."); return; }
@@ -793,7 +814,8 @@ function renderInicio(){
   const metaEq = rows.reduce((a,r)=>a+r.meta,0), matsEq = rows.reduce((a,r)=>a+r.matsMes,0);
   const top = rows.slice(0,3);
   const precisaBackup = podeGerir() && backupInfo && backupInfo.ultimoMes !== mesKey() && leads.length;
-  el.innerHTML = (precisaBackup ? `<div class="warn"><span><b>Backup de ${mesNome()}:</b> baixe a planilha com todos os leads e guarde no seu computador ou Drive.${backupInfo.ultimoEm ? ` Último backup em ${brAno(backupInfo.ultimoEm)}.` : ""}</span><button class="btn primary" type="button" id="btnBackup">Baixar backup agora</button></div>` : "") + `
+  const naoLidos = recadosNaoLidos();
+  el.innerHTML = (naoLidos.length ? `<div class="warn" style="background:var(--calm-soft);color:var(--calm)"><span><b>${naoLidos.length} recado(s) novo(s) da Isabella:</b> ${esc(naoLidos[0].titulo || "")}</span><button class="btn primary" type="button" id="btnVerRec">Ler agora</button></div>` : "") + (precisaBackup ? `<div class="warn"><span><b>Backup de ${mesNome()}:</b> baixe a planilha com todos os leads e guarde no seu computador ou Drive.${backupInfo.ultimoEm ? ` Último backup em ${brAno(backupInfo.ultimoEm)}.` : ""}</span><button class="btn primary" type="button" id="btnBackup">Baixar backup agora</button></div>` : "") + `
     <div class="row" style="justify-content:space-between">
       <h3 class="sec">Ranking · ${RANK_PER[rankPer]}</h3>
       <div class="chips">${Object.entries(RANK_PER).map(([k,v])=>`<button type="button" class="chip" data-rper="${k}" aria-pressed="${k===rankPer}">${v}</button>`).join("")}</div>
@@ -815,9 +837,105 @@ function renderInicio(){
           <td>${r.carteira}</td><td>${r.atras ? `<span style="color:var(--late);font-weight:600">${r.atras}</span>` : "0"}</td></tr>`).join("")}</tbody>
       </table></div>
       <p class="note">Ordem: matrículas no período; empate decide por atendimentos. Atendimentos são mensagens marcadas como enviadas e respostas registradas no sistema. Leads conquistados são os que ela pegou na aba Sem vendedora.</p>
-    </section>`}`;
+    </section>
+    ${podeGerir() ? carteiraHTML() : ""}
+    <p class="note">Dúvida sobre como marcar um lead? Veja a aba <b>Recados e guia</b>.</p>`}`;
 }
-document.getElementById("inicio").addEventListener("click", e=>{ if(e.target.id==="btnBackup"){ exportarLeads(); return; } const b = e.target.closest("[data-rper]"); if(b){ rankPer = b.dataset.rper; renderInicio(); } });
+let recados = [], lidos = {};
+const quemSou = () => meuNome() || userEmail || "";
+function recadosNaoLidos(){ const eu = quemSou(); if(!eu || podeGerir()) return []; return recados.filter(r=>!(lidos[r.id]||{})[eu]); }
+function renderRecados(){
+  const el = document.getElementById("recados");
+  if(el.contains(document.activeElement) && ["TEXTAREA","INPUT"].includes(document.activeElement.tagName)) return;
+  const adm = podeGerir(), eu = quemSou();
+  const pessoas = equipe;
+  const lista = recados.slice().sort((a,b)=>String(b.em||b.data).localeCompare(String(a.em||a.data)));
+  el.innerHTML = `
+    ${adm ? `<section class="panel">
+      <h3 class="sec">Novo recado para a equipe</h3>
+      <label class="f">Título<input type="text" id="recTit" maxlength="80" placeholder="Ex.: Mudança no aluno matriculado"></label>
+      <label class="f">Mensagem<textarea id="recTxt" rows="5" placeholder="Escreva o recado. Pode usar várias linhas."></textarea></label>
+      <div class="row"><button class="btn primary" type="button" id="recPub">Publicar recado</button></div>
+    </section>` : ""}
+    <section class="panel">
+      <h3 class="sec">Recados</h3>
+      ${lista.length ? lista.map(r=>{ const lr = lidos[r.id]||{}; const leram = pessoas.filter(n=>lr[n]); const faltam = pessoas.filter(n=>!lr[n] && n!==r.por);
+        const li = !!lr[eu];
+        return `<div class="${!adm && !li ? "ctx" : "info"}" style="gap:6px">
+          <div class="row" style="justify-content:space-between"><b style="font-size:1rem">${esc(r.titulo||"Recado")}</b><span class="note">${brAno(r.data)}${r.por?` · ${esc(r.por)}`:""}</span></div>
+          <div style="white-space:pre-wrap;line-height:1.5">${esc(r.texto)}</div>
+          ${adm ? `<p class="note"><b>Leram (${leram.length} de ${pessoas.length}):</b> ${leram.map(esc).join(", ") || "ninguém ainda"}${faltam.length?` · <b>Faltam:</b> ${faltam.map(esc).join(", ")}`:""}</p>
+            <div class="row"><button class="btn ghost danger" type="button" data-recdel="${esc(r.id)}">Apagar</button></div>`
+          : li ? `<span class="note ok">Você marcou como lido.</span>` : `<div class="row"><button class="btn primary" type="button" data-reclido="${esc(r.id)}">Entendi</button></div>`}
+        </div>`; }).join("") : `<p class="note">Nenhum recado ainda.${adm ? " Escreva o primeiro acima." : ""}</p>`}
+    </section>
+    <section class="panel">
+      <h3 class="sec">Guia: rotina de cada dia</h3>
+      <ol style="margin:0;padding-left:1.2rem;line-height:1.7;font-size:.92rem">
+        <li>Abra <b>Chamar hoje</b> e a sua fila em <b>Sem vendedora</b>.</li>
+        <li>Em cada lead: <b>Abrir no WhatsApp</b> → envie a mensagem pronta (ou o áudio, seguindo o roteiro) → volte e clique em <b>Marcar como enviada</b>.</li>
+        <li>O lead respondeu? Clique em <b>Respondeu</b> (ou <b>Respondeu: é minha</b>) e conte como foi a conversa e quando chamar de novo.</li>
+        <li>Conversou de novo com quem já está em atendimento? <b>Registrar conversa</b>.</li>
+        <li>Fechou? <b>Mais opções → Mudar situação → Matriculado</b>, com a data da matrícula, do 1º boleto e do início das aulas.</li>
+        <li>Lead novo chegou? <b>+ Novo lead</b> na hora. Se for um lead antigo de quem não sabemos nada, marque <b>Lead antigo</b>: a mensagem vira de apresentação.</li>
+      </ol>
+    </section>
+    ${guiaHTML().replace('<details class="panel">','<details class="panel" open>')}`;
+}
+document.getElementById("recados").addEventListener("click", async e=>{
+  if(!db) return;
+  if(e.target.id==="recPub"){
+    const titulo = document.getElementById("recTit").value.trim(), texto = document.getElementById("recTxt").value.trim();
+    if(!texto){ toast("Escreva a mensagem"); return; }
+    const novo = {id: "r"+Date.now(), data: today(), em: new Date().toISOString(), titulo, texto, por: quemSou()};
+    try{ await db.doc("config/recados").set({itens:[...recados, novo].slice(-50)}); toast("Recado publicado"); document.getElementById("recTit").value=""; document.getElementById("recTxt").value=""; }
+    catch(err){ toast("Não foi possível publicar."); }
+  }
+  const lido = e.target.closest("[data-reclido]");
+  if(lido){ const eu = quemSou(); try{ await db.collection("lidos").doc(lido.dataset.reclido).set({[eu]: new Date().toISOString()}, {merge:true}); toast("Obrigada! 💚"); }catch(err){ toast("Não foi possível marcar. Avise a Isabella."); } }
+  const del = e.target.closest("[data-recdel]");
+  if(del){ try{ await db.doc("config/recados").set({itens: recados.filter(r=>r.id!==del.dataset.recdel)}); toast("Recado apagado"); }catch(err){ toast("Não foi possível apagar."); } }
+});
+function carteiraHTML(){
+  const t = today(); const g = l => (STAGES[l.etapa]||{}).grupo;
+  const linha = ls => ({
+    semresp: ls.filter(l=>g(l)==="semresp").length,
+    atend: ls.filter(l=>g(l)==="atend").length,
+    atrasado: ls.filter(l=>g(l)==="atend" && l.proximo && l.proximo<t).length,
+    agendado: ls.filter(l=>g(l)==="agendado").length,
+    parou: ls.filter(l=>g(l)==="fria").length,
+    mat: ls.filter(l=>g(l)==="mat").length });
+  const rows = equipe.map(n=>({n, ...linha(leads.filter(l=>l.responsavel===n))}));
+  const pool = linha(leads.filter(isPool));
+  const tot = linha(leads);
+  const cel = (v, cor) => v ? (cor ? `<span style="color:var(--${cor});font-weight:700">${v}</span>` : v) : `<span style="color:var(--muted)">0</span>`;
+  const tr = (nome, r) => `<tr><td>${nome}</td><td>${cel(r.semresp)}</td><td><b>${r.atend}</b></td><td>${cel(r.atrasado,"late")}</td><td>${cel(r.agendado)}</td><td>${cel(r.parou,"today")}</td><td>${cel(r.mat)}</td></tr>`;
+  return `<section class="panel">
+    <h3 class="sec">Como está a carteira de cada uma</h3>
+    <div class="tblwrap"><table class="rank">
+      <thead><tr><th>Vendedora</th><th>Ainda não responderam</th><th>Em atendimento</th><th>…com contato atrasado</th><th>Pediram para chamar depois</th><th>Lista fria</th><th>Matriculados</th></tr></thead>
+      <tbody>${rows.map(r=>tr(`<span class="pill owner" style="--c:var(--p${ownerColor(r.n)})">${esc(r.n)}</span>`, r)).join("")}
+      ${tr(`<span class="pill muted">Sem vendedora</span>`, pool)}
+      <tr class="total"><td>Total</td><td>${tot.semresp}</td><td>${tot.atend}</td><td>${tot.atrasado}</td><td>${tot.agendado}</td><td>${tot.parou}</td><td>${tot.mat}</td></tr></tbody>
+    </table></div>
+    <p class="note">"Em atendimento" é quem respondeu e está conversando com a vendedora. "Contato atrasado" é atendimento cujo próximo contato já passou e ninguém marcou nada.</p>
+  </section>`;
+}
+function guiaHTML(){
+  const it = (rot, quando) => `<li><b>${rot}</b>: ${quando}</li>`;
+  return `<details class="panel"><summary style="cursor:pointer;font-weight:600">Como marcar cada situação</summary>
+    <ul style="margin:.4rem 0 0;padding-left:1.1rem;line-height:1.6;font-size:.9rem">
+      ${it("Ainda não respondeu","ninguém conseguiu conversar ainda. As 3 primeiras tentativas são a cada 2 dias; depois, a cada 15 dias. Depois de 5 meses sem resposta, o lead passa sozinho para outra vendedora, que se apresenta de novo. Se continuar sem resposta por mais 5 meses, vai para a Lista fria.")}
+      ${it("Em atendimento","o lead respondeu. Clique em <b>Respondeu</b> e, depois disso, em <b>Registrar conversa</b> sempre que falar com ele.")}
+      ${it("Pediu para chamar depois","o lead pediu para ser chamado numa data (ex.: \"me chama em janeiro\"). Some das listas e volta sozinho nesse dia.")}
+      ${it("Matriculado","fechou. A vendedora manda só uma mensagem, 7 dias depois do início das aulas; o resto é com a Permanência.")}
+      ${it("Lista fria","parou de responder ou disse que não vai fazer agora. Sai da rotina diária e fica guardado para novas ofertas na aba Lista fria.")}
+      ${it("Pediu para não ser chamado","pediu para não receber mais mensagens. Nunca mais entra em lista nem oferta.")}
+    </ul>
+    <p class="note" style="margin-top:.4rem">No card, os botões principais são <b>Abrir no WhatsApp</b>, <b>Marcar como enviada</b> e <b>Respondeu / Registrar conversa</b>. O resto (mudar situação, reagendar, passar para outra vendedora, editar) fica em <b>Mais opções</b>.</p></details>`;
+}
+function irPara(t){ tab = t; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab===t)); render(); window.scrollTo(0,0); }
+document.getElementById("inicio").addEventListener("click", e=>{ if(e.target.id==="btnBackup"){ exportarLeads(); return; } if(e.target.id==="btnVerRec"){ irPara("recados"); return; } const b = e.target.closest("[data-rper]"); if(b){ rankPer = b.dataset.rper; renderInicio(); } });
 
 /* ---------- números ---------- */
 function periodRange(){
@@ -890,7 +1008,7 @@ function renderNumeros(){
       <div class="tblwrap"><table class="rank"><thead><tr><th>#</th><th>Lead</th><th>Vendedora</th><th>Situação</th><th>Última ação</th><th>Dias parado</th></tr></thead>
       <tbody>${parados.slice(0,40).map((x,i)=>`<tr><td>${i+1}</td><td>${esc(nomeExib(x.l))}</td><td>${esc(x.l.responsavel)}</td><td>${esc(STAGES[x.l.etapa].label)}</td><td>${brAno(x.u)}</td><td><b>${diff(hojeT,x.u)}</b></td></tr>`).join("")}</tbody></table></div>
       ${parados.length>40?`<p class="note">…e mais ${parados.length-40}.</p>`:""}` : `<p class="note">Nenhum lead parado. Ótimo sinal.</p>`}
-      <p class="note">Leads em Novo, Recebeu informações ou Em conversa, com vendedora, sem nenhuma ação há 15 dias ou mais. Só você vê.</p>
+      <p class="note">Leads em "Ainda não respondeu" ou "Em atendimento", com vendedora, sem nenhuma ação há 15 dias ou mais. Só você vê.</p>
     </section>`;
   el.innerHTML = anual + paradosHTML + `
     <div class="row"><label class="f" style="flex-direction:row;align-items:center;gap:8px">Período
@@ -945,7 +1063,7 @@ function renderNumeros(){
           : `<p class="note">Ainda sem registros. Aparece conforme as vendedoras preenchem "O que travou?".</p>`; })()}
     </section>
     <section class="panel">
-      <h3 class="sec">Motivos de perda</h3>
+      <h3 class="sec">Por que foram para a lista fria</h3>
       ${mot.length ? mot.map(x=>`<div class="bar"><span>${esc(x.m)}</span><div class="track"><div class="fill" style="width:${Math.round(x.n*100/maxM)}%"></div></div><span class="v">${x.n}</span></div>`).join("")
         : `<p class="note">Nenhum lead perdido entre os cadastrados no período.</p>`}
     </section>`;
@@ -1026,7 +1144,7 @@ function mapHeaders(hs){
 function stageFrom(t){ const n = norm(t);
   if(!n) return "novo"; if(n.includes("nao quer")) return "naoquer"; if(n.includes("perd")) return "perdido"; if(n.includes("matric")) return "matriculado";
   if(n.includes("frio")) return "frio"; if(n.includes("pediu")||n.includes("agend")) return "agendado"; if(n.includes("convers")||n.includes("negoc")) return "negociando";
-  if(n.includes("inform")) return "informado"; return "novo"; }
+  if(n.includes("inform")||n.includes("atend")) return "negociando"; if(n.includes("parou")) return "frio"; if(n.includes("desist")) return "perdido"; return "novo"; }
 function origemFrom(t){ const n = norm(t); if(!n) return "";
   if(n.includes("insta")) return "Instagram"; if(n.includes("whats")) return "WhatsApp direto"; if(n.includes("indic")) return "Indicação";
   if(n.includes("site")||n.includes("google")) return "Site / Google"; if(n.includes("panfl")||n.includes("evento")) return "Panfleto / evento";
@@ -1144,18 +1262,18 @@ document.getElementById("config").addEventListener("click", async e=>{
 });
 
 /* ---------- campanhas ---------- */
-let campNome = "", campMsg = CAMP_DEFAULT, campDias = "90";
+let campNome = "", campMsg = CAMP_DEFAULT, campDias = "tudo";
 try{ campMsg = localStorage.getItem("campMsg") || CAMP_DEFAULT; campNome = localStorage.getItem("campNome") || ""; }catch(e){}
 function renderCampControls(){
-  document.getElementById("campSit").innerHTML = `<span class="lbl">Incluir</span>` + [["perdido","Perdidos"],["frio","Frios"]].map(([k,t])=>`<button type="button" class="chip" data-sit="${k}" aria-pressed="${campSit.has(k)}">${t}</button>`).join("");
+  document.getElementById("campSit").innerHTML = "";
   document.getElementById("campMot").innerHTML = `<span class="lbl">Motivo</span><button type="button" class="chip" data-mot="" aria-pressed="${campMot.size===0}">Todos</button>` +
     MOTIVOS.map(m=>`<button type="button" class="chip" data-mot="${esc(m)}" aria-pressed="${campMot.has(m)}">${esc(m)}</button>`).join("");
 }
 const campLabel = () => campNome.trim() || `Campanha ${br(today())}`;
 function campLista(){
   const lim = campDias==="tudo" ? null : addDays(today(), -Number(campDias));
-  return mine().filter(l => campSit.has(l.etapa) && l.etapa!=="naoquer" &&
-    (l.etapa!=="perdido" || ((!lim || String(l.perdidoEm||"")>=lim) && (campMot.size===0 || campMot.has(l.motivoPerda)))))
+  return mine().filter(l => (l.etapa==="frio" || l.etapa==="perdido") &&
+    (!lim || String(l.perdidoEm || l.criadoEm || "").slice(0,10)>=lim) && (campMot.size===0 || campMot.has(l.motivoPerda || "Parou de responder")))
     .sort((a,b)=>String(a.nome).localeCompare(b.nome));
 }
 const campFeita = l => (l.campanhas||[]).some(c=>c.nome===campLabel());
@@ -1172,7 +1290,7 @@ function renderCampList(){
         ${f?"":`<button class="btn" type="button" data-cact="enviada">Marcar enviada</button>`}
         <button class="btn" type="button" data-cact="respondeu">Respondeu</button>
       </div></div>`; }).join("")
-    : emptyHTML("Ninguém nesse filtro","Leads Perdidos e Frios aparecem aqui. Ajuste o período ou os motivos.");
+    : emptyHTML("Lista fria vazia nesse filtro","Leads vão para cá quando param de responder (3 tentativas) ou quando alguém marca <b>Lista fria</b>.");
 }
 document.getElementById("campanha").addEventListener("click", async e=>{
   const sit = e.target.closest("[data-sit]"), mot = e.target.closest("[data-mot]");
@@ -1182,7 +1300,7 @@ document.getElementById("campanha").addEventListener("click", async e=>{
   const l = leads.find(x=>x.id===row.dataset.id); if(!l) return;
   if(act==="enviada"){ const c = [...(l.campanhas||[]), {nome:campLabel(), data:today()}].slice(-10);
     if(await patch(l.id, {campanhas:c}, `campanha enviada: ${campLabel()}`)) toast("Marcado como enviado"); }
-  if(act==="respondeu"){ if(await patch(l.id, {etapa:"negociando", tentativas:0, proximo:addDays(today(),3)}, `respondeu à campanha ${campLabel()} → Em conversa`)) toast("Voltou para Em conversa, contato em 3 dias"); }
+  if(act==="respondeu"){ if(await patch(l.id, {etapa:"negociando", tentativas:0, proximo:addDays(today(),3)}, `respondeu à oferta ${campLabel()} → Em atendimento`)) toast("Voltou para Em atendimento, contato em 3 dias"); }
 });
 document.getElementById("campanha").addEventListener("input", e=>{
   if(e.target.id==="campNome"){ campNome = e.target.value; try{ localStorage.setItem("campNome", campNome); }catch(err){} renderCampList(); }
@@ -1320,6 +1438,11 @@ async function patch(id, data, acao){
   try{ await db.collection("leads").doc(id).update({...data, ...patchExtra, historico}); return true; }
   catch(e){ toast(e.code==="permission-denied" ? "Seu e-mail não tem permissão para editar. Fale com a Isabella." : "Não salvou. Tente de novo."); return false; }
 }
+function proximaVendedora(atual){
+  const candidatas = equipe.filter(n=>n!==atual); if(!candidatas.length) return null;
+  const carga = n => leads.filter(l=>(l.responsavel===n || (!l.responsavel && l.filaDe===n)) && ["novo","negociando","agendado","informado"].includes(l.etapa)).length;
+  return candidatas.sort((a,b)=>carga(a)-carga(b))[0];
+}
 async function marcarEnviado(l){
   patchExtra = isPool(l) ? {chamandoPor: meuNome() || userEmail, chamandoEm: today()} : {};
   try{ await marcarEnviado_(l); } finally { patchExtra = {}; }
@@ -1328,12 +1451,9 @@ async function marcarEnviado_(l){
   const t = today(); const s = STAGES[l.etapa] || {};
   if(l.etapa==="matriculado"){
     const feitos = [...(l.posFeitos||[])]; if(l.posAtual && !feitos.includes(l.posAtual)) feitos.push(l.posAtual);
-    const semResp = (l.posSemResposta||0)+1; const risco = semResp>=2;
     const nx = nextPos({...l, posFeitos:feitos});
-    const label = (POS.find(p=>p.k===l.posAtual)||{}).label || "contato";
-    await patch(l.id, {posFeitos:feitos, posAtual:nx.key, proximo:nx.date, posSemResposta:semResp, risco, riscoAvisado: risco ? (l.riscoAvisado||null) : null, ultimoEnvio:t},
-      `pós-matrícula enviado: ${label}${risco && !l.risco ? " · marcado em risco" : ""}`);
-    toast(risco && !l.risco ? "Enviado. 2 contatos sem resposta: aluno marcado em risco" : "Marcado como enviado");
+    await patch(l.id, {posFeitos:feitos, posAtual:nx.key, proximo:nx.date, ultimoEnvio:t}, "pós-matrícula: mensagem de 7 dias enviada");
+    toast("Enviado. Daqui em diante, o acompanhamento é da Permanência");
     return;
   }
   if(l.etapa==="agendado"){
@@ -1342,8 +1462,24 @@ async function marcarEnviado_(l){
   }
   if(s.retry){
     const n = (l.tentativas||0)+1;
-    if(n>=MAX_TENT){ await patch(l.id, {etapa:"frio", tentativas:0, proximo:addDays(t,30), ultimoEnvio:t}, `${MAX_TENT} tentativas sem resposta → Frio`); toast(`${MAX_TENT} tentativas sem resposta. Lead foi para Frio (volta em 30 dias)`); }
-    else { await patch(l.id, {tentativas:n, proximo:addDays(t,RETRY_DIAS), ultimoEnvio:t}, `mensagem enviada (tentativa ${n} de ${MAX_TENT})`); toast(`Enviado. Se não responder, volta em ${RETRY_DIAS} dias`); }
+    const ini = l.cicloInicio || String(l.criadoEm||"").slice(0,10) || t;
+    const ciclos = l.ciclos || 1;
+    if(n > MAX_TENT && diff(t, ini) >= CICLO_DIAS){
+      if(ciclos >= MAX_CICLOS){
+        await patch(l.id, {etapa:"frio", tentativas:0, proximo:null, motivoPerda:"Parou de responder", perdidoEm:t, ultimoEnvio:t, reapresentar:false}, `${ciclos} vendedoras por 5 meses sem resposta → Lista fria`);
+        toast("Mais de 5 meses sem resposta com 2 vendedoras. Lead foi para a Lista fria"); return;
+      }
+      const atual = l.responsavel || l.filaDe || "";
+      const outra = proximaVendedora(atual);
+      const d = {etapa:"novo", tentativas:0, cicloInicio:t, ciclos:ciclos+1, reapresentar:true, proximo:addDays(t,1), ultimoEnvio:t, objecao:null, resumo:""};
+      if(l.responsavel) d.responsavel = outra || l.responsavel; else d.filaDe = outra || l.filaDe || null;
+      await patch(l.id, d, `5 meses sem resposta com ${atual||"a equipe"} → passado para ${outra||"—"} com mensagem de apresentação`);
+      toast(`5 meses sem resposta. Lead passado para ${outra}, que vai se apresentar amanhã`); return;
+    }
+    const prox = n < MAX_TENT ? RETRY_DIAS : LONGO_DIAS;
+    await patch(l.id, {tentativas:n, proximo:addDays(t,prox), ultimoEnvio:t, ...(l.cicloInicio ? {} : {cicloInicio:ini, ciclos})},
+      n <= MAX_TENT ? `mensagem enviada (tentativa ${n} de ${MAX_TENT})` : `mensagem enviada (tentativa ${n}, de 15 em 15 dias)`);
+    toast(`Enviado. Se não responder, volta em ${prox} dias`);
     return;
   }
   await patch(l.id, {proximo:null, ultimoEnvio:t}, "mensagem enviada"); toast("Marcado como enviado");
@@ -1386,6 +1522,7 @@ list.addEventListener("click", async e=>{
     else { pendingStage.set(id, "negociando"); render(); }
     return;
   }
+  if(act==="risco"){ if(await patch(id, {risco:true, riscoAvisado:null}, "marcado em risco para a Permanência")) toast("Aluno marcado em risco. A Permanência vê no topo da lista dela"); return; }
   if(act==="ctx"){ pendingCtxOnly.add(id); pendingStage.set(id, "negociando"); render(); return; }
   if(act==="nota"){ pendingNota.add(id); render(); setTimeout(()=>{ const t = document.getElementById(`nota-${id}`); if(t) t.focus(); },0); return; }
   if(act==="nota-no"){ pendingNota.delete(id); render(); return; }
@@ -1420,7 +1557,7 @@ list.addEventListener("click", async e=>{
     if(phoneDigits(tel).length < 12){ toast("Confira o WhatsApp: informe DDD + número"); return; }
     const dp = findDup(tel, id); if(dp){ toast(dupTxt(dp)); return; }
     const ind = g("ind").value.trim();
-    const d = {nome, telefone:tel, curso:g("curso").value.trim(), origem: ind && !g("origem").value ? "Indicação" : g("origem").value, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind)};
+    const d = {nome, telefone:tel, curso:g("curso").value.trim(), origem: ind && !g("origem").value ? "Indicação" : g("origem").value, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind), antigo: g("antigo") ? g("antigo").checked : !!l.antigo};
     if(g("bol")){ const b = g("bol").value;
       if(!b){ toast("Informe a data do 1º boleto"); return; }
       if(l.dataMatricula && b < l.dataMatricula){ toast("O 1º boleto não pode vencer antes da matrícula"); return; }
@@ -1487,7 +1624,7 @@ document.querySelector(".tabs").addEventListener("click", e=>{
 });
 document.getElementById("busca").addEventListener("input", e=>{ busca = e.target.value; render(); });
 const fe = document.getElementById("filtroEtapa");
-fe.innerHTML = `<option value="">Todas as situações</option>` + Object.entries(STAGES).map(([k,s])=>`<option value="${k}">${esc(s.label)}</option>`).join("");
+fe.innerHTML = `<option value="">Todas as situações</option>` + Object.entries(STAGES).filter(([k,x])=>!x.oculto).map(([k,s])=>`<option value="${k}">${esc(s.label)}</option>`).join("");
 fe.addEventListener("change", e=>{ filtroEtapa = e.target.value; render(); });
 const fo = document.getElementById("filtroOrigem");
 fo.innerHTML = `<option value="">Todas as origens</option>` + ORIGENS.map(o=>`<option>${esc(o)}</option>`).join("");
@@ -1497,7 +1634,7 @@ fo.addEventListener("change", e=>{ filtroOrigem = e.target.value; render(); });
 const form = document.getElementById("formNovo");
 const fEtapa = document.getElementById("fEtapa");
 document.getElementById("fOrigem").innerHTML = `<option value="">Não sei ainda</option>` + ORIGENS.map(o=>`<option${o==="Instagram"?" selected":""}>${esc(o)}</option>`).join("");
-fEtapa.innerHTML = ["novo","informado","negociando","agendado","matriculado"].map(k=>`<option value="${k}">${esc(STAGES[k].label)} · ${esc(STAGES[k].hint)}</option>`).join("");
+fEtapa.innerHTML = ["novo","negociando","agendado","matriculado"].map(k=>`<option value="${k}">${esc(STAGES[k].label)} · ${esc(STAGES[k].hint)}</option>`).join("");
 function syncExtras(){
   const st = fEtapa.value; const box = document.getElementById("fExtras");
   box.innerHTML = needsExtras(st) ? extrasFields(st, "f-", null) : `<label class="f">Próximo contato<input type="date" id="fData" value="${addDays(today(), STAGES[st].dias)}"></label>`;
@@ -1522,7 +1659,8 @@ form.addEventListener("submit", async e=>{
     nome: document.getElementById("fNome").value.trim(), telefone: tel,
     curso: document.getElementById("fCurso").value.trim(), responsavel: document.getElementById("fResp").value,
     origem, obs: document.getElementById("fObs").value.trim(), criadoEm: new Date().toISOString(), ultimoEnvio: null,
-    indicadoPor: document.getElementById("fInd").value.trim(), indicadoPorId: alunoId(document.getElementById("fInd").value.trim())
+    indicadoPor: document.getElementById("fInd").value.trim(), indicadoPorId: alunoId(document.getElementById("fInd").value.trim()),
+    antigo: document.getElementById("fAntigo").checked, cicloInicio: today(), ciclos: 1
   };
   const d = stageData(base, st, x);
   if(!needsExtras(st)){ const fd = document.getElementById("fData"); if(fd && fd.value) d.proximo = fd.value; }
@@ -1554,6 +1692,26 @@ function atualizarAdmin(){
   if(perm && tab!=="pos"){ tab = "pos"; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab==="pos")); render(); return; }
   if(!adm && (tab==="equipe" || tab==="config")){ tab = "inicio"; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab==="inicio")); render(); }
 }
+let migrou = false;
+async function migrarFluxo(){
+  if(migrou || !db || !podeGerir() || !leads.length) return; migrou = true;
+  const keys = POS.map(p=>p.k); let n = 0;
+  for(const l of leads){
+    const d = {};
+    if(l.etapa==="informado") d.etapa = "negociando";
+    { const h = (l.historico||[]).slice(-1)[0];
+      if(l.etapa==="frio" && !l.voltouCadencia && h && /tentativas sem resposta/.test(h.acao) && !/5 meses/.test(h.acao)){
+        Object.assign(d, {etapa:"novo", tentativas:MAX_TENT, proximo:maxDate(addDays(h.data, LONGO_DIAS), today()), motivoPerda:null, perdidoEm:null, voltouCadencia:true, cicloInicio: l.cicloInicio || String(l.criadoEm||"").slice(0,10) || today(), ciclos: l.ciclos || 1}); } }
+    if(l.etapa==="perdido") d.etapa = "frio";
+    if(!d.voltouCadencia && (l.etapa==="frio" || l.etapa==="perdido") && (l.proximo || !l.motivoPerda)){ d.proximo = null; if(!l.motivoPerda) d.motivoPerda = "Parou de responder"; if(!l.perdidoEm) d.perdidoEm = today(); }
+    if(l.etapa==="matriculado" && l.posAtual && !keys.includes(l.posAtual)){
+      const feitos = (l.posFeitos||[]).filter(k=>keys.includes(k));
+      const nx = nextPos({...l, posFeitos:feitos}); d.posAtual = nx.key; d.proximo = nx.date;
+    }
+    if(Object.keys(d).length){ try{ await db.collection("leads").doc(l.id).update(d); n++; }catch(e){ break; } }
+  }
+  if(n) toast(`${n} lead(s) ajustados para o novo fluxo`);
+}
 function semAcesso(){ const b = document.getElementById("banner"); b.hidden = false;
   b.textContent = "Seu e-mail ainda não está na equipe. Peça para a Isabella adicionar você na aba Equipe com este mesmo e-mail e depois recarregue a página."; }
 auth.onAuthStateChanged(u=>{
@@ -1564,9 +1722,11 @@ auth.onAuthStateChanged(u=>{
   document.getElementById("banner").hidden = true;
   db = fs;
   const onErr = e => { if(e.code==="permission-denied") semAcesso(); else toast("Conexão perdida. Recarregue a página."); };
-  unsubs.push(db.collection("leads").onSnapshot(s=>{ leads = s.docs.map(x=>({id:x.id, ...x.data()})); atualizarAlunosList(); renderSnap(); if(tab==="campanhas") renderCampList(); }, onErr));
+  unsubs.push(db.collection("leads").onSnapshot(s=>{ leads = s.docs.map(x=>({id:x.id, ...x.data()})); atualizarAlunosList(); renderSnap(); migrarFluxo(); if(tab==="campanhas") renderCampList(); }, onErr));
   unsubs.push(db.doc("config/mensagens").onSnapshot(s=>{ tpl = {...DEFAULT_TPL, ...(s.exists ? s.data() : {})}; renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/backup").onSnapshot(s=>{ backupInfo = s.exists ? s.data() : {}; renderSnap(); }, ()=>{}));
+  unsubs.push(db.doc("config/recados").onSnapshot(s=>{ recados = s.exists && Array.isArray(s.data().itens) ? s.data().itens : []; renderSnap(); }, ()=>{}));
+  unsubs.push(db.collection("lidos").onSnapshot(s=>{ lidos = {}; s.docs.forEach(x=>{ lidos[x.id] = x.data(); }); renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/metas").onSnapshot(s=>{ metas = s.exists ? {...s.data()} : {}; renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/calendario").onSnapshot(s=>{ const r = s.exists && s.data().rematricula; rematJanelas = Array.isArray(r) ? r : []; renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/equipe").onSnapshot(s=>{ if(s.exists) aplicarEquipe(s.data()); }, ()=>{}));
