@@ -24,4 +24,7 @@ Painel de follow-up de leads e pós-matrícula do polo. Site estático (GitHub P
 - Time de Permanência: adicione na aba **Equipe** com a função **Permanência**. Ela só vê a aba Pós-matrícula (alunos matriculados, em risco primeiro).
 - Backup: todo mês o Início avisa; clique em **Baixar backup agora** e guarde a planilha.
 - Alguém saiu: clique em **Desativar** na aba Equipe. Os leads dela passam para outra vendedora e o acesso é cortado na hora.
+- Excluídos vão para a **Lixeira** (Configurações) por 30 dias.
+- Duplicados e cursos digitados fora da lista: **Configurações → Leads duplicados / Cursos oferecidos**.
+- Vendedoras só alteram os próprios leads e os sem vendedora (regras do Firestore usam `nomePorEmail`, salvo automaticamente pela aba Equipe).
 - A configuração do Firebase no `config.js` não é segredo; quem protege os dados são as regras.

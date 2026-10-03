@@ -154,6 +154,21 @@ tr.total td{font-weight:700;border-bottom:none}
 .bar .fill{height:100%;background:var(--calm);border-radius:5px}
 .bar .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 .note{font-size:.8rem;color:var(--muted);margin:0}
+.busca-top{position:relative}
+.busca-top input{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 12px;width:100%;font-size:1rem;color:var(--ink)}
+.qres{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:60vh;overflow:auto}
+.qres button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--line);padding:10px 12px;cursor:pointer;color:var(--ink)}
+.qres button:hover,.qres button:focus{background:var(--bg)}
+.qres small{color:var(--muted);font-size:.8rem}
+.ficha{position:fixed;inset:0;z-index:40;background:rgba(10,20,16,.45);overflow:auto;padding:calc(16px + env(safe-area-inset-top,0px)) 16px 40px}
+.ficha-in{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.ficha-top{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--surface);border-radius:12px;padding:10px 14px}
+.ficha .hist{max-height:none}
+body.modo-foco .stats,body.modo-foco #metaStrip,body.modo-foco #chips,body.modo-foco .busca-top,body.modo-foco .tabs{display:none}
+.foco-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;background:var(--accent-soft);border-radius:10px;padding:10px 12px}
+.offline{background:var(--late);color:#fff;padding:10px 12px;border-radius:8px;font-weight:600;font-size:.9rem;position:sticky;top:env(safe-area-inset-top,0px);z-index:35}
+.who h3 button.nome{all:unset;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.who h3 button.nome:focus-visible{outline:2px solid var(--accent)}
 .podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 @media (max-width:560px){.podium{grid-template-columns:1fr}}
 .pcard{border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:6px;background:var(--ps);border:1px solid transparent;min-width:0}
@@ -211,12 +226,17 @@ input[type=file]{font-size:.88rem;max-width:100%}
   </header>
 
   <div class="banner" id="banner" hidden></div>
+  <div class="offline" id="offline" hidden>Sem internet. O que você marcar agora pode não ser salvo. Espere a conexão voltar.</div>
+  <div class="busca-top">
+    <input type="search" id="qGlobal" placeholder="Buscar lead por nome ou telefone…" autocomplete="off" aria-label="Buscar lead">
+    <div id="qRes" class="qres" hidden></div>
+  </div>
 
   <form class="panel" id="formNovo" hidden>
     <div class="grid2">
       <label class="f">Nome <span style="font-weight:400">(deixe em branco se não souber)</span><input type="text" id="fNome" autocomplete="off"></label>
       <label class="f">WhatsApp (com DDD)*<input type="tel" id="fTel" required placeholder="21 99999-9999" autocomplete="off"></label>
-      <label class="f">Curso de interesse<input type="text" id="fCurso" placeholder="Ex.: Administração" autocomplete="off"></label>
+      <label class="f">Curso de interesse<span id="fCursoBox"></span></label>
       <label class="f">Vendedora<select id="fResp"></select></label>
       <label class="f">Origem<select id="fOrigem"></select></label>
       <label class="f">Indicado por (aluno)<input type="text" id="fInd" list="alunosList" autocomplete="off" placeholder="Nome de quem indicou"></label>
@@ -268,7 +288,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
 
   <div id="inicio" class="list"></div>
   <div id="recados" class="list" hidden></div>
-  <div id="list" class="list"></div>
+  <div id="zona"><div id="list" class="list"></div><div id="ficha" class="ficha" hidden></div></div>
   <div id="campanha" class="list" hidden>
     <section class="panel">
       <h3 class="sec">Lista fria: novas ofertas</h3>
@@ -280,7 +300,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
       <div class="chips" id="campSit"></div>
       <div class="chips" id="campMot"></div>
       <label class="f">Mensagem<textarea id="campMsg"></textarea></label>
-      <p class="tplhelp">Use <code>{nome}</code>, <code>{curso}</code> e <code>{responsavel}</code>.  Quem está como "Não quer contato" nunca entra em campanha.</p>
+      <p class="tplhelp">Use <code>{nome}</code>, <code>{curso}</code> e <code>{responsavel}</code>. Para variar o texto, escreva 2 ou 3 versões separadas por uma linha só com <code>---</code>. Quem pediu para não ser chamado nunca entra aqui.</p>
     </section>
     <p class="note" id="campResumo"></p>
     <div id="campList" class="list"></div>
@@ -316,24 +336,33 @@ const OBJECOES = [["semtempo","Sem tempo agora, vai responder depois"],["convers
 const NAO_OBJECAO = ["semtempo","conversando","outro"];
 const OBJ_MENU = ["conversando","semtempo","preco","familia","curso","outro"];
 const objLabel = k => (OBJECOES.find(o=>o[0]===k)||[,""])[1];
+const CURSOS_PADRAO = ["Administração","Biomedicina","Ciências Contábeis","Educação Física (Bacharelado)","Educação Física (Licenciatura)","Estética e Cosmética","Farmácia","Fisioterapia","Gestão de Recursos Humanos","Marketing","Nutrição","Pedagogia","Psicopedagogia","Radiologia","Serviço Social","Terapia Ocupacional"];
+let CURSOS = CURSOS_PADRAO.slice();
+function cursoSel(idBase, valor){
+  const v = String(valor||"").trim(); const fora = v && !CURSOS.includes(v);
+  return `<select id="${idBase}" data-cursosel="${idBase}"><option value="">Não sei ainda</option>${CURSOS.map(c=>`<option${c===v?" selected":""}>${esc(c)}</option>`).join("")}${fora?`<option value="${esc(v)}" selected>${esc(v)} (fora da lista)</option>`:""}<option value="__outro">Outro (escrever)…</option></select>
+    <input type="text" id="${idBase}-outro" placeholder="Nome do curso" hidden style="margin-top:6px">`;
+}
+function lerCurso(idBase){ const sel = document.getElementById(idBase); if(!sel) return ""; if(sel.value==="__outro"){ const o = document.getElementById(idBase+"-outro"); return o ? o.value.trim() : ""; } return sel.value; }
+document.addEventListener("change", e=>{ const b = e.target.dataset && e.target.dataset.cursosel; if(!b) return; const o = document.getElementById(b+"-outro"); if(o){ o.hidden = e.target.value!=="__outro"; if(!o.hidden) o.focus(); } });
 const ORIGENS = ["Instagram","WhatsApp direto","Indicação","Site / Google","Panfleto / evento","Passou no polo","Outro"];
 const MOTIVOS = ["Parou de responder","Preço","Sem tempo / horário","Desistiu de estudar agora","Foi para outra faculdade","Outro"];
 const POS = [
   {k:"pos_d7", label:"Contato de 7 dias", curto:"7 dias"}
 ];
 const DEFAULT_TPL = {
-  novo: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Posso te enviar alguns áudios explicando sobre a faculdade e os valores?",
+  novo: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Posso te enviar alguns áudios explicando sobre a faculdade e os valores?\n---\nOi, {nome}! Aqui é a {responsavel}, do polo UniFECAF 😊 Vi seu interesse em fazer faculdade. Posso te mandar um áudio rapidinho com os cursos e valores?\n---\nOlá, {nome}! Tudo certo? Sou a {responsavel}, do polo UniFECAF. Quer que eu te explique por áudio como funcionam as aulas e as condições de matrícula?",
   informado: "Oi, {nome}! Ficou com alguma dúvida sobre o curso de {curso}? Pergunto porque estamos com uma condição especial de matrícula e queria te passar antes de encerrar.",
-  negociando: "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se tiver qualquer dúvida sobre valores ou aulas, me fala que eu te ajudo.",
+  negociando: "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se tiver qualquer dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\nOi, {nome}, tudo bem? Passando para saber se ficou alguma dúvida sobre o curso de {curso}. Estou por aqui!\n---\n{nome}, tudo certo? Queria saber o que você achou das informações do curso de {curso}. Posso te ajudar em algo?",
   agendado: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Você tinha me pedido para te chamar agora, {motivo}. Ainda faz sentido conversarmos sobre o curso de {curso}?",
-  frio: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Conversamos há um tempo sobre o curso de {curso}. Surgiram condições novas de matrícula, quer que eu te passe?",
+  frio: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Conversamos há um tempo sobre o curso de {curso}. Surgiram condições novas de matrícula, quer que eu te passe?\n---\nOi, {nome}! Aqui é a {responsavel}, do polo UniFECAF. Lembrei de você: abrimos condições novas para o curso de {curso}. Posso te mandar?",
   obj_preco: "Oi, {nome}! Fiquei pensando no que você falou sobre o valor. Consegui ver uma condição de parcelamento para o curso de {curso} que pode caber melhor. Posso te mandar um áudio rapidinho explicando?",
   obj_horario: "Oi, {nome}! Lembrei que o seu receio era o tempo. No semipresencial você organiza os estudos no seu ritmo e os encontros no polo são poucos. Quer que eu te mostre como fica a rotina?",
   obj_familia: "Oi, {nome}! Conseguiu conversar em casa sobre a faculdade? Se ajudar, posso te mandar um resumo com valores e duração do curso de {curso} para você mostrar para eles.",
   obj_curso: "Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?",
   obj_documentos: "Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?",
   obj_sumiu: "Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?",
-  antigo: "Oi! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Há um tempo você conversou com a gente sobre fazer faculdade. Ainda tem interesse? Estamos com condições novas de matrícula e posso te passar tudo rapidinho. 😊",
+  antigo: "Oi! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Há um tempo você conversou com a gente sobre fazer faculdade. Ainda tem interesse? Estamos com condições novas de matrícula e posso te passar tudo rapidinho. 😊\n---\nOlá! Aqui é a {responsavel}, do polo UniFECAF. Você falou com a gente um tempo atrás sobre graduação. Ainda pensa em começar? Tenho novidades nas condições deste mês.\n---\nOi, tudo bem? Sou a {responsavel}, do polo UniFECAF 😊 Estou retomando o contato com quem pediu informações sobre faculdade. Ainda faz sentido para você?",
   reapresentacao: "Oi! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Agora sou eu quem vai te acompanhar por aqui. Você ainda pensa em fazer faculdade? Posso te mandar as condições deste mês?",
   rot_antigo: "• Se apresente: seu nome e que é do polo UniFECAF\n• Diga que a pessoa conversou com o polo há um tempo (sem cobrar)\n• Pergunte se ainda tem interesse e qual curso\n• Ofereça mandar as condições do mês em um áudio curto",
   obj_semtempo: "Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊",
@@ -342,7 +371,7 @@ const DEFAULT_TPL = {
   rot_semtempo: "• Áudio curto e leve, sem cobrança\n• Retome em uma frase o que vocês estavam falando\n• Pergunte se agora é um bom momento ou qual horário fica melhor",
   rot_conversando: "• Retome o ponto onde a conversa parou\n• Responda a dúvida que ficou em aberto\n• Avance para o próximo passo: valores, condição ou documentos",
   rot_outro: "• Leia o resumo antes de gravar\n• Retome o assunto da última conversa\n• Termine com uma pergunta simples",
-  obj_naorespondeu: "Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?",
+  obj_naorespondeu: "Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?\n---\nOi, {nome}! Não sei se você conseguiu ver minhas mensagens. Posso te mandar um resumo rapidinho do curso de {curso}?",
   rot_novo: "• Se apresente: seu nome e que você é do polo UniFECAF\n• Pergunte o que fez a pessoa procurar a faculdade agora (trabalho, promoção, sonho)\n• Confirme o curso de interesse e se já concluiu o ensino médio\n• Explique o formato do curso em uma frase\n• Termine com uma pergunta: \"posso te mandar os valores e a condição deste mês?\"",
   rot_preco: "• Valide: \"entendo, é um investimento importante\"\n• Traga o valor para o dia a dia (quanto dá por dia)\n• Apresente o parcelamento e a condição vigente, se houver\n• Lembre o retorno: o que o diploma muda no salário ou na carreira dela\n• Feche com escolha: \"prefere começar com a condição A ou B?\"",
   rot_horario: "• Pergunte como é a rotina dela hoje (trabalho, filhos)\n• Explique como funcionam as aulas e os encontros no polo\n• Dê um exemplo real de aluna com rotina parecida que está conseguindo\n• Sugira quanto tempo por dia ela precisaria reservar\n• Pergunte: \"com isso, cabe na sua rotina?\"",
@@ -351,7 +380,7 @@ const DEFAULT_TPL = {
   rot_documentos: "• Mande a lista de documentos do curso\n• Explique que o envio é por foto, aqui mesmo\n• Ofereça ajuda com o que estiver faltando\n• Combine um prazo: \"consegue me mandar até amanhã?\"",
   rot_sumiu: "• Áudio curto (menos de 30 segundos), tom leve, sem cobrança\n• Lembre em uma frase o que vocês conversaram\n• Traga uma novidade (condição, prazo de início das aulas)\n• Pergunte se ainda faz sentido ou se prefere retomar mais para frente",
   rot_naorespondeu: "• Áudio de até 1 minuto resumindo o principal: curso, formato e valor\n• Uma pergunta simples no final, de sim ou não\n• Evite mandar muitas mensagens seguidas",
-  pos_semana: "Oi, {nome}! Conseguiu contato com o nosso suporte? Já está assistindo às suas aulas? Lembrando: qualquer dúvida, nós estamos por aqui. 😊",
+  pos_semana: "Oi, {nome}! Conseguiu contato com o nosso suporte? Já está assistindo às suas aulas? Lembrando: qualquer dúvida, nós estamos por aqui. 😊\n---\nOi, {nome}, tudo bem? Passando para saber se você já conseguiu falar com o suporte e acessar suas aulas. Qualquer dúvida, é só chamar!\n---\n{nome}, como estão os primeiros dias? Conseguiu contato com o suporte e já está assistindo às aulas? Estamos por aqui para o que precisar 💚",
   pos_boleto: "Oi, {nome}! Passando para lembrar que o seu primeiro boleto vence em {vencimento}. Se precisar da 2ª via ou tiver alguma dúvida, é só me chamar aqui.",
   pos_inicio: "Oi, {nome}! Suas aulas do curso de {curso} começam hoje! 🎉 Qualquer dúvida sobre o portal, as aulas ou os encontros no polo, estamos por aqui. Bons estudos!",
   pos_d30: "Oi, {nome}! Já completou um mês de aulas. Como está sendo o curso de {curso}? Está conseguindo acompanhar as aulas e o portal?",
@@ -371,6 +400,10 @@ let dupOk = false, impText = "", impParsed = null, importing = false;
 const CAMP_DEFAULT = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Abrimos uma condição especial de matrícula para o curso de {curso} e lembrei de você. Quer que eu te passe os detalhes?";
 const campSit = new Set(["frio","perdido"]), campMot = new Set();
 let agMes = "", agDia = "";
+const avisoHorario = {};
+function foraDeHorario(){ const h = new Date().getHours(); return h < 8 || h >= 21; }
+let focoUltimo = null;
+let limite = 50, fichaId = null, focoAtivo = false; const focoPulados = new Set();
 let tab = "inicio", resp = "todas", busca = "", filtroEtapa = "", filtroOrigem = "", periodo = "mes";
 const pendingPegar = new Set(), pendingCtxOnly = new Set();
 const drafts = new Map(), confirmDel = new Set(), pendingStage = new Map(), pendingDate = new Set(), pendingEdit = new Set();
@@ -420,6 +453,11 @@ function alunoId(nome){ const n = norm(nome); if(!n) return null; const a = lead
 function atualizarAlunosList(){ const dl = document.getElementById("alunosList"); if(!dl) return;
   const nomes = [...new Set(leads.filter(l=>l.etapa==="matriculado").map(l=>l.nome))].sort();
   const html = nomes.map(n=>`<option value="${esc(n)}">`).join(""); if(dl.innerHTML!==html) dl.innerHTML = html; }
+function podeMexer(l){
+  if(!SITE || podeGerir()) return true;
+  if(isPerm()) return l.etapa==="matriculado";
+  return !l.responsavel || l.responsavel===meuNome();
+}
 const isPool = l => !l.responsavel && !["perdido","naoquer","matriculado"].includes(l.etapa);
 function meuNome(){
   const m = (typeof membrosAtuais==="function" ? membrosAtuais() : []).filter(x=>x.ativa!==false);
@@ -476,8 +514,11 @@ function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual==="pos_d7" ? "
   if(l.etapa==="novo" && (l.tentativas||0)===0 && l.reapresentar) return "reapresentacao";
   if(l.etapa==="novo" && (l.tentativas||0)===0 && l.antigo) return "antigo";
   if(["informado","negociando","frio"].includes(l.etapa) && l.objecao && tpl["obj_"+l.objecao]) return "obj_"+l.objecao; const s = STAGES[l.etapa]; return s && s.tpl || null; }
+function hashStr(x){ let h = 0; for(const c of String(x||"")) h = (h*31 + c.charCodeAt(0)) >>> 0; return h; }
+function variacao(t, l){ const partes = String(t).split(/\n\s*---\s*\n/).map(x=>x.trim()).filter(Boolean); if(partes.length<2) return partes[0] || "";
+  return partes[(hashStr(l.id) + (l.tentativas||0)) % partes.length]; }
 function fillTpl(l){
-  const k = tplKey(l); const t = k ? (tpl[k] || "") : "";
+  const k = tplKey(l); const t = k ? variacao(tpl[k] || "", l) : "";
   const f = firstDue(l);
   return trocaNome(t, l.nome)
           .replaceAll("{curso}", l.curso || "graduação")
@@ -568,11 +609,12 @@ function renderChips(){
   sel.value = cur && equipe.includes(cur) ? cur : "";
 }
 
-function cardHTML(l){
+function cardHTML(l, full){
+  if(!full && fichaId && l.id===fichaId) return "";
   const id = esc(l.id); const st = status(l); const stage = STAGES[l.etapa] || STAGES.novo;
   const key = tplKey(l); const canMsg = !!key && l.etapa!=="naoquer" && !isPerm();
   const text = drafts.has(l.id) ? drafts.get(l.id) : fillTpl(l);
-  const hist = (l.historico||[]).slice(-4).reverse();
+  const hist = full ? (l.historico||[]).slice().reverse() : (l.historico||[]).slice(-4).reverse();
   const pills = [l.responsavel ? `<span class="pill owner" style="--c:var(--p${ownerColor(l.responsavel)})">${esc(l.responsavel)}</span>` : `<span class="pill muted">Sem vendedora</span>`,
     `<span class="pill stage">${esc(stage.label)}</span>`];
   if(l.etapa==="matriculado" && !l.primeiroBoleto) pills.push(`<span class="pill risk">Falta data do 1º boleto</span>`);
@@ -594,7 +636,7 @@ function cardHTML(l){
     info.push(`<div class="steps">${POS.map(p=>`<span class="step ${feitos.includes(p.k)?"done":p.k===l.posAtual?"now":""}">${esc(p.curto)}</span>`).join("")}</div>`);
   }
   if(l.obs) info.push(`<span>${esc(l.obs)}</span>`);
-  for(const n of (l.notas||[]).slice(-3)) info.push(`<span><b>Nota ${br(n.data)}${n.por?` · ${esc(firstName(n.por))}`:""}:</b> ${esc(n.texto)}</span>`);
+  for(const n of (full ? (l.notas||[]) : (l.notas||[]).slice(-3))) info.push(`<span><b>Nota ${br(n.data)}${n.por?` · ${esc(firstName(n.por))}`:""}:</b> ${esc(n.texto)}</span>`);
 
   const ps = pendingStage.get(l.id);
   const stageBox = ps ? `<div class="stagebox"><b>${pendingPegar.has(l.id) ? "Respondeu: ficar com o lead" : ps==="negociando" && pendingCtxOnly.has(l.id) ? "Registrar conversa" : `Mudar para ${esc(STAGES[ps].label)}`}</b>
@@ -613,7 +655,7 @@ function cardHTML(l){
       <div class="grid2">
         <label class="f">Nome<input type="text" id="ed-nome-${id}" value="${esc(temNome(l.nome) ? l.nome : "")}" placeholder="Ainda não sabemos"></label>
         <label class="f">WhatsApp*<input type="tel" id="ed-tel-${id}" value="${esc(l.telefone)}"></label>
-        <label class="f">Curso<input type="text" id="ed-curso-${id}" value="${esc(l.curso||"")}" placeholder="Ex.: Administração"></label>
+        <label class="f">Curso${cursoSel(`ed-curso-${id}`, l.curso)}</label>
         <label class="f">Indicado por (aluno)<input type="text" id="ed-ind-${id}" list="alunosList" autocomplete="off" value="${esc(l.indicadoPor||"")}"></label>
         <label class="row" style="font-size:.88rem;font-weight:600;align-self:end"><input type="checkbox" id="ed-antigo-${id}"${l.antigo?" checked":""}> Lead antigo</label>
         <label class="f">Origem<select id="ed-origem-${id}"><option value="">Não sei ainda</option>${ORIGENS.map(o=>`<option${o===l.origem?" selected":""}>${esc(o)}</option>`).join("")}</select></label>
@@ -625,20 +667,20 @@ function cardHTML(l){
   const faltam = [!temNome(l.nome) && "nome", !l.curso && "curso", !l.origem && "origem"].filter(Boolean);
   return `<article class="card ${st.cls}" data-id="${id}">
     <div class="top">
-      <div class="who"><h3>${temNome(l.nome) ? esc(l.nome) : `<span style="color:var(--muted)">Sem nome</span>`}</h3>
+      <div class="who"><h3>${full ? (temNome(l.nome) ? esc(l.nome) : `<span style="color:var(--muted)">Sem nome</span>`) : `<button type="button" class="nome" data-ficha="${id}" title="Abrir ficha">${temNome(l.nome) ? esc(l.nome) : `<span style="color:var(--muted)">Sem nome</span>`}</button>`}</h3>
         <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}</span>`:""}${l.origem?`<span>via ${esc(l.origem)}</span>`:""}${l.indicadoPor?`<span>indicado por ${esc(l.indicadoPor)}</span>`:""}</div></div>
       <div class="pills">${pills.join("")}</div>
     </div>
     ${l.objecao && !["matriculado","perdido","naoquer"].includes(l.etapa) ? `<div class="ctx"><span><b>${NAO_OBJECAO.includes(l.objecao) || l.objecao==="naorespondeu" ? "Situação" : "Travou"}:</b> ${esc(objLabel(l.objecao))}</span>${l.resumo?`<span><b>Última conversa${l.resumoEm?` (${br(l.resumoEm)}${l.resumoPor?`, ${esc(firstName(l.resumoPor))}`:""})`:""}:</b> ${esc(l.resumo)}</span>`:""}</div>` : ""}
     ${info.length?`<div class="info">${info.join("")}</div>`:""}
-    ${canMsg?`<details class="msg"${st.cls==="late"||st.cls==="today"?" open":""}><summary>Mensagem pronta${l.etapa==="matriculado"&&l.posAtual?` · ${esc(POS.find(p=>p.k===l.posAtual).label)}`:""}</summary>
+    ${canMsg && podeMexer(l)?`<details class="msg"${st.cls==="late"||st.cls==="today"?" open":""}><summary>Mensagem pronta${l.etapa==="matriculado"&&l.posAtual?` · ${esc(POS.find(p=>p.k===l.posAtual).label)}`:""}</summary>
       <textarea id="msg-${id}" data-draft="${id}">${esc(text)}</textarea></details>`:""}
-    ${rotKey(l) ? `<details class="msg"><summary>Roteiro do áudio · ${esc(rotKey(l)==="rot_novo" ? "primeiro contato" : objLabel(l.objecao))}</summary><div class="rot">${esc(tpl[rotKey(l)]).replace(/\n/g,"<br>")}</div></details>` : ""}
+    ${rotKey(l) && podeMexer(l) ? `<details class="msg"><summary>Roteiro do áudio · ${esc(rotKey(l)==="rot_novo" ? "primeiro contato" : objLabel(l.objecao))}</summary><div class="rot">${esc(tpl[rotKey(l)]).replace(/\n/g,"<br>")}</div></details>` : ""}
     ${stageBox}${dateBox}${editBox}
     ${pendingNota.has(l.id) ? `<div class="stagebox"><b>Anotar</b>
       <label class="f">O que você quer registrar?<textarea id="nota-${id}" placeholder="Ex.: mãe vai pagar, prefere contato à noite, tem FIES…"></textarea></label>
       <div class="row"><button class="btn primary" type="button" data-act="nota-ok">Salvar anotação</button><button class="btn ghost" type="button" data-act="nota-no">Cancelar</button></div></div>` : ""}
-    <div class="actions">
+    ${!podeMexer(l) ? `<p class="note" style="border-top:1px dashed var(--line);padding-top:8px">Lead da <b>${esc(l.responsavel)}</b>. ${/^isabella/i.test(l.responsavel) ? "Só a Isabella pode alterar." : "Só ela ou a Isabella podem alterar."}</p>` : `<div class="actions">
       ${canMsg?`<a class="btn primary" data-wa="${id}" href="${esc(waLink(l,text))}" target="_blank" rel="noopener">Abrir no WhatsApp</a>
       <button class="btn" type="button" data-act="enviado">Marcar como enviada</button>`:
       (l.etapa!=="naoquer"?`<a class="btn" href="${esc(`https://wa.me/${phoneDigits(l.telefone)}`)}" target="_blank" rel="noopener">WhatsApp</a>`:"")}
@@ -652,19 +694,41 @@ function cardHTML(l){
       ${l.etapa!=="naoquer"?`<select data-act="adiar" id="adiar-${id}" aria-label="Reagendar">
         <option value="">Reagendar…</option><option value="0">Hoje</option><option value="1">Amanhã</option><option value="3">Em 3 dias</option><option value="7">Em 7 dias</option><option value="d">Escolher data…</option><option value="x">Tirar da agenda</option>
       </select>`:""}
-      <select data-act="resp" id="resp-${id}" aria-label="Passar para outra vendedora">
+      ${podeGerir() ? `<select data-act="resp" id="resp-${id}" aria-label="Passar para outra vendedora">
         <option value="">Passar para…</option>
         ${equipe.filter(n=>n!==l.responsavel).map(n=>`<option>${esc(n)}</option>`).join("")}
-      </select>
+      </select>` : ""}
       <button class="btn ghost" type="button" data-act="nota">Anotar</button>
       <button class="btn ghost" type="button" data-act="edit">${faltam.length?`Completar dados (${faltam.join(", ")})`:"Editar dados"}</button>
       ${confirmDel.has(l.id)
-        ? `<span class="confirm">Excluir mesmo? <button class="btn danger" type="button" data-act="del-ok">Excluir</button><button class="btn ghost" type="button" data-act="del-no">Não</button></span>`
+        ? `<span class="confirm">Excluir? (fica 30 dias na lixeira) <button class="btn danger" type="button" data-act="del-ok">Excluir</button><button class="btn ghost" type="button" data-act="del-no">Não</button></span>`
         : `<button class="btn ghost danger" type="button" data-act="del">Excluir</button>`}
       </div></details>`}
-    </div>
+    </div>`}
     ${hist.length?`<ul class="hist">${hist.map(h=>`<li>${br(h.data)} · ${esc(h.acao)}${h.por?` <span style="opacity:.8">(${esc(h.por)})</span>`:""}</li>`).join("")}</ul>`:""}
   </article>`;
+}
+function renderFicha(){
+  const el = document.getElementById("ficha"); if(!el) return;
+  const l = fichaId && leads.find(x=>x.id===fichaId);
+  if(!l){ el.hidden = true; el.innerHTML = ""; if(fichaId){ fichaId = null; } document.body.style.overflow = ""; return; }
+  const linha = (k,v) => v ? `<span><b>${k}:</b> ${v}</span>` : "";
+  el.hidden = false; document.body.style.overflow = "hidden";
+  el.innerHTML = `<div class="ficha-in">
+    <div class="ficha-top"><b>Ficha do lead</b><button class="btn" type="button" id="fichaFechar">Fechar</button></div>
+    <div class="info" style="background:var(--surface)">
+      ${linha("WhatsApp", esc(phoneFmt(l.telefone)))}${linha("Vendedora", esc(l.responsavel || (l.filaDe ? "Sem vendedora · fila da "+l.filaDe : "Sem vendedora")))}
+      ${linha("Curso", esc(l.curso||""))}${linha("Origem", esc(l.origem||""))}${linha("Indicado por", esc(l.indicadoPor||""))}
+      ${linha("Cadastrado em", l.criadoEm ? brAno(l.criadoEm) : "")}${linha("Último envio", l.ultimoEnvio ? brAno(l.ultimoEnvio) : "")}
+      ${linha("Próximo contato", l.proximo ? brAno(l.proximo) : "sem data")}${l.antigo ? `<span><b>Lead antigo</b></span>` : ""}
+    </div>
+    ${cardHTML(l, true)}
+  </div>`;
+}
+function pag(arr){
+  const v = arr.slice(0, limite).map(l=>cardHTML(l)).join("");
+  const resto = arr.length - limite;
+  return v + (resto>0 ? `<button class="btn" type="button" id="verMais" style="align-self:center">Ver mais ${Math.min(50,resto)} (faltam ${resto})</button>` : "");
 }
 const emptyHTML = (title, body) => `<div class="empty"><strong>${title}</strong>${body}</div>`;
 
@@ -672,9 +736,11 @@ let fromSnap = false;
 function renderSnap(){ fromSnap = true; try{ render(); } finally { fromSnap = false; } }
 function render(){
   const a = document.activeElement;
-  if(!fromSnap){ const f = document.activeElement; if(f && f!==document.body && f.blur && f.closest && f.closest("#list,.tabs,#chips")) f.blur(); }
-  if(fromSnap && a && a.closest && a.closest("#list") && ["TEXTAREA","SELECT","INPUT"].includes(a.tagName) && document.body.contains(a)){ pendingRender = true; return; }
+  if(!fromSnap){ const f = document.activeElement; if(f && f!==document.body && f.blur && f.closest && f.closest("#zona,.tabs,#chips")) f.blur(); }
+  if(fromSnap && a && a.closest && a.closest("#zona") && ["TEXTAREA","SELECT","INPUT"].includes(a.tagName) && document.body.contains(a)){ pendingRender = true; return; }
   pendingRender = false;
+  document.body.classList.toggle("modo-foco", focoAtivo && tab==="hoje");
+  renderFicha();
   const t = today(); const L = mine().filter(l=>l.responsavel || (isPool(l) && l.filaDe)); const pool = leads.filter(isPool);
   const due = L.filter(l=>l.proximo && l.proximo<=t).sort((x,y)=>x.proximo.localeCompare(y.proximo)||String(x.nome).localeCompare(y.nome));
   const fut = L.filter(l=>l.proximo && l.proximo>t).sort((x,y)=>x.proximo.localeCompare(y.proximo));
@@ -739,13 +805,21 @@ function render(){
         <p class="note"><b>${hoje} para chamar hoje</b>${poolVista==="minha" ? " (sua fila + os que ainda não têm fila)" : ""}. Ao marcar como enviada, o lead sai da lista de hoje e volta em ${RETRY_DIAS} dias se não responder.
         ${nFut ? ` <button class="btn ghost" type="button" id="poolFut">${poolFuturos ? "Esconder" : "Ver também"} ${nFut} já chamado(s) / agendado(s) para outros dias</button>` : ""}<br> Ao abrir o WhatsApp, o lead fica marcado como "está chamando" para as outras até o fim do dia. Quando responder, clique em <b>Respondeu: é minha</b>.
         ${nOcup ? ` <button class="btn ghost" type="button" id="mostrarOcup">${mostrarOcup ? "Esconder" : "Mostrar"} ${nOcup} que colegas estão chamando</button>` : ""}</p>
-      </section>` + (ver.length ? ver.map(cardHTML).join("") : emptyHTML(pool.length ? "Nada para chamar agora" : "Nenhum lead sem vendedora", pool.length ? "Todos os leads desta lista já foram chamados hoje. 🎉" : "Ao cadastrar um lead que ainda não respondeu, deixe a vendedora como <b>Sem vendedora</b>."));
+      </section>` + (ver.length ? pag(ver) : emptyHTML(pool.length ? "Nada para chamar agora" : "Nenhum lead sem vendedora", pool.length ? "Todos os leads desta lista já foram chamados hoje. 🎉" : "Ao cadastrar um lead que ainda não respondeu, deixe a vendedora como <b>Sem vendedora</b>."));
     return;
   }
   if(tab==="hoje"){
-    list.innerHTML = due.length ? due.map(cardHTML).join("") :
+    if(focoAtivo){
+      const meus = due.filter(podeMexer); const fila = meus.filter(l=>!focoPulados.has(l.id)); const l = fila[0];
+      list.innerHTML = `<div class="foco-bar"><span><b>Modo foco</b> · faltam ${fila.length} de ${meus.length} para hoje${focoPulados.size?` (${focoPulados.size} pulado(s))`:""}</span>
+        <span class="row">${l ? `<button class="btn" type="button" id="focoPular">Pular este</button>` : ""}<button class="btn ghost" type="button" id="focoSair">Sair do modo foco</button></span></div>` +
+        (l ? cardHTML(l) : emptyHTML("Tudo feito por hoje! 🎉", focoPulados.size ? `Você pulou ${focoPulados.size} lead(s). <button class="btn" type="button" id="focoVoltar">Ver os pulados</button>` : "Todos os contatos do dia foram feitos."));
+      if(l && l.id!==focoUltimo){ focoUltimo = l.id; window.scrollTo(0,0); }
+      return;
+    }
+    list.innerHTML = (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
-                    : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula."));
+                    : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula.")));
   } else if(tab==="agenda"){
     const porDia = {}; for(const l of L) if(l.proximo) (porDia[l.proximo] = porDia[l.proximo] || []).push(l);
     const [ay, am] = agMes.split("-").map(Number); const first = new Date(ay, am-1, 1); const nd = new Date(ay, am, 0).getDate();
@@ -768,22 +842,22 @@ function render(){
         <p class="note">Toque num dia para ver os contatos. Vermelho: dias que já passaram com contato pendente.</p>
       </section>
       <div class="day">${agDia===t?"Hoje · ":""}${brLong(agDia)} · ${doDia.length} contato(s)</div>
-      ${doDia.length ? doDia.map(cardHTML).join("") : emptyHTML("Nenhum contato neste dia","Escolha outro dia no calendário.")}`;
+      ${doDia.length ? pag(doDia) : emptyHTML("Nenhum contato neste dia","Escolha outro dia no calendário.")}`;
   } else if(tab==="pos"){
     if(isPerm()){ const todos = leads.filter(l=>l.etapa==="matriculado").sort((x,y)=>(y.risco&&!y.riscoAvisado?1:0)-(x.risco&&!x.riscoAvisado?1:0) || (y.risco?1:0)-(x.risco?1:0) || String(x.nome).localeCompare(y.nome));
       const r = todos.filter(l=>l.risco).length;
-      list.innerHTML = `<p class="note">${todos.length} aluno(s) matriculado(s) · <b>${r} em risco</b>. Os em risco aparecem primeiro. Use <b>Assumi o caso</b> ao começar a tratar, e <b>Anotar</b> para registrar o combinado.</p>` + (todos.length ? todos.map(cardHTML).join("") : emptyHTML("Nenhum aluno matriculado ainda",""));
+      list.innerHTML = `<p class="note">${todos.length} aluno(s) matriculado(s) · <b>${r} em risco</b>. Os em risco aparecem primeiro. Use <b>Assumi o caso</b> ao começar a tratar, e <b>Anotar</b> para registrar o combinado.</p>` + (todos.length ? pag(todos) : emptyHTML("Nenhum aluno matriculado ainda",""));
       return; }
     const ord = alunos.slice().sort((x,y)=>(y.risco?1:0)-(x.risco?1:0) || (x.primeiroBoleto?1:0)-(y.primeiroBoleto?1:0) || String(x.proximo||"9").localeCompare(String(y.proximo||"9")));
     const semBol = alunos.filter(l=>!l.primeiroBoleto).length, semIni = alunos.filter(l=>!l.inicioAulas).length;
-    list.innerHTML = ord.length ? (semBol ? `<div class="warn"><span><b>${semBol} aluno(s) sem a data do 1º boleto.</b> O lembrete do boleto deles usa uma data calculada, que pode estar errada. Abra <b>Editar dados</b> em cada um e informe a data certa.</span></div>` : "") + (semIni ? `<p class="note">${semIni} aluno(s) sem data de início das aulas. Sem ela, a mensagem "suas aulas começam hoje" não é enviada.</p>` : "") + ord.map(cardHTML).join("") :
+    list.innerHTML = ord.length ? (semBol ? `<div class="warn"><span><b>${semBol} aluno(s) sem a data do 1º boleto.</b> O lembrete do boleto deles usa uma data calculada, que pode estar errada. Abra <b>Editar dados</b> em cada um e informe a data certa.</span></div>` : "") + (false ? `<p class="note">${semIni} aluno(s) sem data de início das aulas.</p>` : "") + pag(ord) :
       emptyHTML("Nenhum aluno matriculado ainda","Quando um lead virar matrícula, mude a situação para <b>Matriculado</b> e informe a data do 1º boleto. A régua de contatos começa sozinha.");
   } else {
     const q = busca.trim().toLowerCase(); const qd = q.replace(/\D/g,"");
     const all = mine().filter(l => (!filtroEtapa || l.etapa===filtroEtapa) && (!filtroOrigem || l.origem===filtroOrigem) &&
       (!q || String(l.nome||"").toLowerCase().includes(q) || String(l.curso||"").toLowerCase().includes(q) || (qd && String(l.telefone||"").replace(/\D/g,"").includes(qd))))
       .sort((x,y)=>String(y.criadoEm||"").localeCompare(String(x.criadoEm||"")));
-    list.innerHTML = all.length ? all.map(cardHTML).join("") : emptyHTML("Nenhum lead encontrado","Ajuste a busca ou os filtros.");
+    list.innerHTML = all.length ? `<p class="note">${all.length} lead(s)</p>` + pag(all) : emptyHTML("Nenhum lead encontrado","Ajuste a busca ou os filtros.");
   }
 }
 
@@ -838,7 +912,7 @@ function renderInicio(){
       </table></div>
       <p class="note">Ordem: matrículas no período; empate decide por atendimentos. Atendimentos são mensagens marcadas como enviadas e respostas registradas no sistema. Leads conquistados são os que ela pegou na aba Sem vendedora.</p>
     </section>
-    ${podeGerir() ? carteiraHTML() : ""}
+    ${podeGerir() ? semanaHTML() + carteiraHTML() : ""}
     <p class="note">Dúvida sobre como marcar um lead? Veja a aba <b>Recados e guia</b>.</p>`}`;
 }
 let recados = [], lidos = {};
@@ -896,6 +970,23 @@ document.getElementById("recados").addEventListener("click", async e=>{
   const del = e.target.closest("[data-recdel]");
   if(del){ try{ await db.doc("config/recados").set({itens: recados.filter(r=>r.id!==del.dataset.recdel)}); toast("Recado apagado"); }catch(err){ toast("Não foi possível apagar."); } }
 });
+function semanaHTML(){
+  const t = today(); const dow = (parse(t).getDay()+6)%7; const fim = addDays(t, -dow-1), ini = addDays(fim, -6);
+  const inP = d => d && String(d).slice(0,10)>=ini && String(d).slice(0,10)<=fim;
+  const rows = equipe.map(n=>{ let at = 0, fria = 0;
+    for(const l of leads) for(const h of (l.historico||[])) if(inP(h.data)){ if(h.por===n && ATEND.test(h.acao)) at++; if(l.responsavel===n && /Lista fria/.test(h.acao)) fria++; }
+    const minhas = leads.filter(l=>l.responsavel===n);
+    return {n, mat: minhas.filter(l=>inP(matDate(l))).length, at, novos: minhas.filter(l=>inP(l.criadoEm)).length, fria, atras: minhas.filter(l=>l.proximo && l.proximo<t).length}; });
+  const T = rows.reduce((a,r)=>({mat:a.mat+r.mat, at:a.at+r.at, novos:a.novos+r.novos, fria:a.fria+r.fria, atras:a.atras+r.atras}), {mat:0,at:0,novos:0,fria:0,atras:0});
+  const destaque = rows.slice().sort((a,b)=>b.mat-a.mat || b.at-a.at)[0];
+  const maisAtras = rows.slice().sort((a,b)=>b.atras-a.atras)[0];
+  return `<details class="panel"${parse(t).getDay()===1 ? " open" : ""}><summary style="cursor:pointer;font-weight:600">Resumo da semana passada · ${br(ini)} a ${br(fim)}</summary>
+    <p class="note" style="margin-top:6px"><b>${T.mat}</b> matrícula(s) · <b>${T.at}</b> atendimento(s) · <b>${T.novos}</b> lead(s) novo(s) · <b>${T.fria}</b> foram para a lista fria · <b>${T.atras}</b> contato(s) atrasado(s) hoje.
+    ${destaque && (destaque.mat||destaque.at) ? ` Destaque: <b>${esc(destaque.n)}</b>.` : ""}${maisAtras && maisAtras.atras ? ` Mais atrasos: <b>${esc(maisAtras.n)}</b> (${maisAtras.atras}).` : ""}</p>
+    <div class="tblwrap"><table class="rank"><thead><tr><th></th><th>Vendedora</th><th>Matrículas</th><th>Atendimentos</th><th>Leads novos</th><th>Foram p/ lista fria</th><th>Atrasados hoje</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr><td></td><td><span class="pill owner" style="--c:var(--p${ownerColor(r.n)})">${esc(r.n)}</span></td><td><b>${r.mat}</b></td><td>${r.at}</td><td>${r.novos}</td><td>${r.fria}</td><td>${r.atras?`<span style="color:var(--late);font-weight:700">${r.atras}</span>`:"0"}</td></tr>`).join("")}</tbody></table></div>
+  </details>`;
+}
 function carteiraHTML(){
   const t = today(); const g = l => (STAGES[l.etapa]||{}).grupo;
   const linha = ls => ({
@@ -1030,6 +1121,23 @@ function renderNumeros(){
         : `<p class="note">Nenhuma meta definida para ${mesNome()}. Defina em Configurações → Metas.</p>`}
     </section>
     <section class="panel">
+      <h3 class="sec">Funil do período</h3>
+      ${(()=>{ const respondeu = l => ["negociando","informado","matriculado","agendado"].includes(l.etapa) || !!l.resumoEm || (l.historico||[]).some(h=>/respondeu|Em atendimento|Em conversa/.test(h.acao));
+        const quem = [...equipe, "Sem vendedora"];
+        const lin = quem.map(n=>{ const ls = novos.filter(l=>(l.responsavel||"Sem vendedora")===n); const r = ls.filter(respondeu).length, m = ls.filter(l=>l.etapa==="matriculado").length; return {n, e:ls.length, r, m}; }).filter(x=>x.e);
+        const T = lin.reduce((a,x)=>({e:a.e+x.e, r:a.r+x.r, m:a.m+x.m}), {e:0,r:0,m:0});
+        const barra = (v,max,cor) => `<div class="track" style="height:8px;background:var(--bg);border-radius:4px;overflow:hidden;min-width:60px"><div style="height:100%;width:${max?Math.round(v*100/max):0}%;background:var(--${cor})"></div></div>`;
+        if(!T.e) return `<p class="note">Nenhum lead cadastrado no período.</p>`;
+        return `<div class="tblwrap"><table class="rank"><thead><tr><th>#</th><th>Vendedora</th><th>Entraram</th><th>Responderam</th><th>% resposta</th><th>Matricularam</th><th>% de quem respondeu</th></tr></thead>
+          <tbody>${lin.map((x,i)=>`<tr><td></td><td>${x.n==="Sem vendedora"?`<span class="pill muted">Sem vendedora</span>`:`<span class="pill owner" style="--c:var(--p${ownerColor(x.n)})">${esc(x.n)}</span>`}</td><td>${x.e}</td><td>${x.r}</td><td>${pct(x.r,x.e)}</td><td><b>${x.m}</b></td><td>${pct(x.m,x.r)}</td></tr>`).join("")}
+          <tr class="total"><td></td><td>Total</td><td>${T.e}</td><td>${T.r}</td><td>${pct(T.r,T.e)}</td><td>${T.m}</td><td>${pct(T.m,T.r)}</td></tr></tbody></table></div>
+          <div class="list" style="gap:6px;margin-top:6px">
+            <div class="bar"><span>Entraram</span>${barra(T.e,T.e,"calm")}<span class="v">${T.e}</span></div>
+            <div class="bar"><span>Responderam</span>${barra(T.r,T.e,"today")}<span class="v">${T.r}</span></div>
+            <div class="bar"><span>Matricularam</span>${barra(T.m,T.e,"accent")}<span class="v">${T.m}</span></div></div>
+          <p class="note">Conta os leads cadastrados no período. "% resposta" mostra quem faz o lead responder; "% de quem respondeu" mostra quem fecha depois da conversa.</p>`; })()}
+    </section>
+    <section class="panel">
       <h3 class="sec">Por vendedora</h3>
       <div class="tblwrap"><table>
         <thead><tr><th>Vendedora</th><th>Leads novos</th><th>Matrículas</th><th>Conversão</th><th>Dias até matricular</th><th>1º contato (média)</th><th>Atrasados hoje</th><th>Alunos em risco</th></tr></thead>
@@ -1094,7 +1202,29 @@ function renderConfig(force){
   const cfg = document.getElementById("config");
   if(!force && document.activeElement && cfg.contains(document.activeElement) && document.activeElement.tagName!=="BUTTON") return;
   const mm = metas[mesKey()] || {};
+  const dups = gruposDuplicados();
+  const foraLista = {}; for(const l of leads){ const c = String(l.curso||"").trim(); if(c && !CURSOS.includes(c)) foraLista[c] = (foraLista[c]||0)+1; }
+  const lx = lixeira.slice().sort((a,b)=>String(b.excluidoEm||"").localeCompare(String(a.excluidoEm||"")));
   cfg.innerHTML = `
+    <section class="panel">
+      <h3 class="sec">Leads duplicados · ${dups.length}</h3>
+      ${dups.length ? `<p class="tplhelp">Mesmo WhatsApp cadastrado mais de uma vez. <b>Juntar</b> mantém o cadastro mais avançado, completa o que faltar com os dados do outro, une os históricos e manda a cópia para a lixeira.</p>` +
+        dups.slice(0,30).map((g,i)=>`<div class="info" style="gap:6px">${g.map((l,j)=>`<span>${j===0?"<b>Fica:</b> ":"<b>Junta:</b> "}${esc(nomeExib(l))} · ${esc(phoneFmt(l.telefone))} · ${esc(l.responsavel||"Sem vendedora")} · ${esc((STAGES[l.etapa]||{}).label||"")} · cadastrado ${l.criadoEm?brAno(l.criadoEm):"—"}</span>`).join("")}
+          <div class="row"><button class="btn primary" type="button" data-juntar="${i}">Juntar</button></div></div>`).join("") + (dups.length>30?`<p class="note">…e mais ${dups.length-30}. Junte estes e os próximos aparecem.</p>`:"")
+        : `<p class="note">Nenhum duplicado encontrado.</p>`}
+    </section>
+    <section class="panel">
+      <h3 class="sec">Cursos oferecidos</h3>
+      <p class="tplhelp">Um curso por linha. É a lista que aparece para as meninas escolherem no cadastro.</p>
+      <label class="f">Cursos<textarea id="cursosTxt" rows="8">${esc(CURSOS.join("\n"))}</textarea></label>
+      <div class="row"><button class="btn primary" type="button" id="saveCursos">Salvar cursos</button></div>
+      ${Object.keys(foraLista).length ? `<p class="tplhelp" style="color:var(--ink);font-weight:600">Cursos digitados fora da lista</p><p class="tplhelp">Escolha o curso certo e clique em Corrigir: todos os leads com aquele texto são atualizados.</p>` +
+        Object.entries(foraLista).sort((a,b)=>b[1]-a[1]).map(([c,n],i)=>`<div class="row"><span style="min-width:10rem">"${esc(c)}" · ${n} lead(s)</span><select id="mapc-${i}" data-de="${esc(c)}" style="width:auto"><option value="">Corrigir para…</option>${CURSOS.map(x=>`<option>${esc(x)}</option>`).join("")}</select><button class="btn" type="button" data-mapc="${i}">Corrigir</button></div>`).join("") : ""}
+    </section>
+    <section class="panel">
+      <h3 class="sec">Lixeira · ${lx.length}</h3>
+      ${lx.length ? `<p class="tplhelp">Leads excluídos ficam aqui por 30 dias e depois são apagados de vez.</p>` + lx.slice(0,50).map(l=>`<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:6px"><span>${esc(nomeExib(l))} · ${esc(phoneFmt(l.telefone))} · excluído ${l.excluidoEm?brAno(l.excluidoEm):""}${l.excluidoPor?` por ${esc(l.excluidoPor)}`:""}${l.juntadoCom?" (juntado)":""}</span><span class="row"><button class="btn" type="button" data-restaura="${esc(l.id)}">Restaurar</button><button class="btn ghost danger" type="button" data-apaga="${esc(l.id)}">Apagar de vez</button></span></div>`).join("") : `<p class="note">Lixeira vazia.</p>`}
+    </section>
     <section class="panel">
       <h3 class="sec">Importar leads</h3>
       <p class="tplhelp">Envie a planilha (.xlsx ou .csv) ou cole as linhas copiadas do Excel, com a linha de títulos. Colunas aceitas: Nome, WhatsApp, Curso, Vendedora, Origem, Situação, Próximo contato, Observações, Motivo, Data matrícula, Vencimento. Só Nome e WhatsApp são obrigatórios. WhatsApps que já estão no painel são pulados.</p>
@@ -1112,9 +1242,9 @@ function renderConfig(force){
     </section>
     <section class="panel">
       <h3 class="sec">Mensagens</h3>
-      <p class="tplhelp">Use <code>{nome}</code> (primeiro nome), <code>{curso}</code>, <code>{responsavel}</code>, <code>{motivo}</code> (motivo do pedido de contato) e <code>{vencimento}</code> (data do 1º boleto). Dá para ajustar a mensagem no card antes de enviar.</p>
+      <p class="tplhelp">Use <code>{nome}</code> (primeiro nome), <code>{curso}</code>, <code>{responsavel}</code>, <code>{motivo}</code> (motivo do pedido de contato) e <code>{vencimento}</code> (data do 1º boleto). Dá para ajustar a mensagem no card antes de enviar.<br><b>Variações:</b> para não mandar o texto idêntico para todo mundo (o WhatsApp pode marcar como spam), escreva 2 ou 3 versões separadas por uma linha só com <code>---</code>. O sistema alterna sozinho entre elas.</p>
       ${TPL_GROUPS.map(g=>`<p class="tplhelp" style="font-weight:600;color:var(--ink)">${g.title}</p>`+
-        g.keys.map(([k,lbl])=>`<label class="f">${esc(lbl)}<textarea id="tpl-${k}" data-tpl="${k}">${esc(tpl[k])}</textarea></label>`).join("")).join("")}
+        g.keys.map(([k,lbl])=>`<label class="f">${esc(lbl)}<textarea id="tpl-${k}" data-tpl="${k}" rows="5">${esc(tpl[k])}</textarea></label>`).join("")).join("")}
       <div class="row"><button class="btn primary" type="button" id="saveTpl">Salvar mensagens</button><button class="btn ghost" type="button" id="resetTpl">Voltar ao padrão</button></div>
     </section>
     <section class="panel">
@@ -1224,6 +1354,18 @@ document.getElementById("config").addEventListener("click", async e=>{
   if(!db) return;
   const fail = () => toast("Não salvou. Verifique seu acesso.");
   const id = e.target.id;
+  const rs = e.target.closest("[data-restaura]"), ap = e.target.closest("[data-apaga]"), jn = e.target.closest("[data-juntar]"), mc = e.target.closest("[data-mapc]");
+  if(rs){ try{ await db.collection("leads").doc(rs.dataset.restaura).update({excluido:false, excluidoEm:null}); toast("Lead restaurado"); }catch(err){ fail(); } return; }
+  if(ap){ if(ap.dataset.ok!=="1"){ ap.dataset.ok="1"; ap.textContent = "Confirmar: apagar de vez"; return; }
+    try{ await db.collection("leads").doc(ap.dataset.apaga).delete(); toast("Apagado de vez"); }catch(err){ fail(); } return; }
+  if(jn){ const g = gruposDuplicados()[Number(jn.dataset.juntar)]; if(!g) return; jn.disabled = true; jn.textContent = "Juntando…";
+    if(await juntarLeads(g)) toast("Leads juntados"); renderConfig(true); return; }
+  if(mc){ const sel = document.getElementById("mapc-"+mc.dataset.mapc); const de = sel.dataset.de, para = sel.value; if(!para){ toast("Escolha o curso certo"); return; }
+    mc.disabled = true; let n = 0; for(const l of leads.filter(x=>String(x.curso||"").trim()===de)){ try{ await db.collection("leads").doc(l.id).update({curso:para}); n++; }catch(err){ break; } }
+    toast(`${n} lead(s) corrigidos para ${para}`); renderConfig(true); return; }
+  if(id==="saveCursos"){ const lista = [...new Set(document.getElementById("cursosTxt").value.split("\n").map(x=>x.trim()).filter(Boolean))];
+    if(!lista.length){ toast("Informe pelo menos um curso"); return; }
+    try{ await db.doc("config/cursos").set({lista}); toast("Lista de cursos salva"); }catch(err){ fail(); } return; }
   if(id==="btnModelo") saveXlsx("modelo-importacao-leads.xlsx", [
     {"Nome":"Maria Souza","WhatsApp":"21 99999-0000","Curso":"Administração","Vendedora":equipe[0]||"","Origem":"Instagram","Situação":"Novo","Próximo contato":brAno(addDays(today(),1)),"Observações":"","Motivo":"","Data matrícula":"","1º boleto":""},
     {"Nome":"João Lima","WhatsApp":"21 98888-0000","Curso":"Pedagogia","Vendedora":equipe[1]||equipe[0]||"","Origem":"Indicação","Situação":"Matriculado","Próximo contato":"","Observações":"","Motivo":"","Data matrícula":brAno(today()),"1º boleto":brAno(addDays(today(),20)),"Início das aulas":brAno(addDays(today(),15))}
@@ -1277,7 +1419,7 @@ function campLista(){
     .sort((a,b)=>String(a.nome).localeCompare(b.nome));
 }
 const campFeita = l => (l.campanhas||[]).some(c=>c.nome===campLabel());
-function campText(l){ return trocaNome(campMsg, l.nome).replaceAll("{curso}", l.curso || "graduação").replaceAll("{responsavel}", l.responsavel || "equipe"); }
+function campText(l){ return trocaNome(variacao(campMsg, l), l.nome).replaceAll("{curso}", l.curso || "graduação").replaceAll("{responsavel}", l.responsavel || "equipe"); }
 function renderCampList(){
   const ls = campLista(); const feitas = ls.filter(campFeita).length;
   document.getElementById("campResumo").textContent = ls.length ? `${ls.length} lead(s) na lista · ${feitas} já receberam "${campLabel()}"` : "";
@@ -1285,14 +1427,16 @@ function renderCampList(){
     <div class="crow${f?" sent":""}" data-id="${esc(l.id)}">
       <div class="who"><b>${esc(nomeExib(l))}</b>
         <div class="pills"><span class="pill owner" style="--c:var(--p${ownerColor(l.responsavel)})">${esc(l.responsavel||"Sem vendedora")}</span><span class="pill stage">${esc(STAGES[l.etapa].label)}</span>${l.motivoPerda?`<span class="pill muted">${esc(l.motivoPerda)}</span>`:""}${f?`<span class="pill future">Enviada</span>`:""}</div></div>
-      <div class="acts">
+      <div class="acts">${!podeMexer(l) ? `<span class="note">Lead da ${esc(l.responsavel)}</span>` : `
         <a class="btn primary" href="${esc(waLink(l, campText(l)))}" target="_blank" rel="noopener">Abrir no WhatsApp</a>
         ${f?"":`<button class="btn" type="button" data-cact="enviada">Marcar enviada</button>`}
-        <button class="btn" type="button" data-cact="respondeu">Respondeu</button>
+        <button class="btn" type="button" data-cact="respondeu">Respondeu</button>`}
       </div></div>`; }).join("")
     : emptyHTML("Lista fria vazia nesse filtro","Leads vão para cá quando param de responder (3 tentativas) ou quando alguém marca <b>Lista fria</b>.");
 }
 document.getElementById("campanha").addEventListener("click", async e=>{
+  const wa2 = e.target.closest("a.btn.primary");
+  if(wa2 && foraDeHorario()){ const k = "camp"+(e.target.closest(".crow")||{dataset:{}}).dataset.id; if(!(avisoHorario[k] && Date.now()-avisoHorario[k] < 15000)){ e.preventDefault(); avisoHorario[k] = Date.now(); toast(`Agora são ${new Date().getHours()}h. O ideal é chamar entre 8h e 21h. Toque de novo para enviar mesmo assim.`); return; } }
   const sit = e.target.closest("[data-sit]"), mot = e.target.closest("[data-mot]");
   if(sit){ const k = sit.dataset.sit; campSit.has(k) ? campSit.delete(k) : campSit.add(k); renderCampControls(); renderCampList(); return; }
   if(mot){ const m = mot.dataset.mot; if(!m) campMot.clear(); else campMot.has(m) ? campMot.delete(m) : campMot.add(m); renderCampControls(); renderCampList(); return; }
@@ -1327,11 +1471,13 @@ function aplicarEquipe(data){
   if(resp!=="todas" && !equipe.includes(resp)) resp = "todas";
   if(!respSalvo && SITE && !podeGerir() && meuNome() && equipe.includes(meuNome())){ resp = meuNome(); respSalvo = true; }
   renderChips(); atualizarAdmin(); render();
+  if(SITE && podeGerir() && db && !(data && data.nomePorEmail) && Array.isArray(data && data.membros)) salvarEquipe(data.membros, "");
 }
 async function salvarEquipe(m, msg){
   const ativos = m.filter(x=>x.ativa!==false);
   try{ await db.doc("config/equipe").set({membros:m, nomes:ativos.filter(x=>x.papel!=="permanencia").map(x=>x.nome), emails:ativos.map(x=>String(x.email||"").toLowerCase()).filter(Boolean),
-    emailsAcademico:ativos.filter(x=>x.papel==="permanencia").map(x=>String(x.email||"").toLowerCase()).filter(Boolean)}); toast(msg); return true; }
+    emailsAcademico:ativos.filter(x=>x.papel==="permanencia").map(x=>String(x.email||"").toLowerCase()).filter(Boolean),
+    nomePorEmail:Object.fromEntries(ativos.filter(x=>x.email).map(x=>[String(x.email).toLowerCase(), x.nome]))}); if(msg) toast(msg); return true; }
   catch(e){ toast(e.code==="permission-denied" ? "Só a administradora pode mudar a equipe." : "Não salvou. Tente de novo."); return false; }
 }
 function boxSaida(){
@@ -1438,6 +1584,28 @@ async function patch(id, data, acao){
   try{ await db.collection("leads").doc(id).update({...data, ...patchExtra, historico}); return true; }
   catch(e){ toast(e.code==="permission-denied" ? "Seu e-mail não tem permissão para editar. Fale com a Isabella." : "Não salvou. Tente de novo."); return false; }
 }
+const RANK_ETAPA = {matriculado:6, negociando:5, informado:5, agendado:4, novo:3, frio:2, perdido:2, naoquer:1};
+function gruposDuplicados(){
+  const g = {}; for(const l of leads){ const k = telKey(l.telefone); if(k) (g[k] = g[k] || []).push(l); }
+  return Object.values(g).filter(x=>x.length>1).map(x=>x.slice().sort((a,b)=>(RANK_ETAPA[b.etapa]||0)-(RANK_ETAPA[a.etapa]||0) || (b.historico||[]).length-(a.historico||[]).length || String(a.criadoEm||"").localeCompare(String(b.criadoEm||""))));
+}
+async function juntarLeads(g){
+  const [p, ...outros] = g; const d = {};
+  for(const o of outros){
+    for(const k of ["nome","curso","origem","indicadoPor","obs","responsavel","dataMatricula","primeiroBoleto","inicioAulas","resumo","objecao"]) if(!temValor(p[k]) && !temValor(d[k]) && temValor(o[k])) d[k] = o[k];
+    if(k_nome_ruim(p) && temNome(o.nome)) d.nome = o.nome;
+  }
+  d.notas = [...(p.notas||[]), ...outros.flatMap(o=>o.notas||[])].sort((a,b)=>String(a.data).localeCompare(String(b.data))).slice(-30);
+  const hist = [...(p.historico||[]), ...outros.flatMap(o=>o.historico||[])].sort((a,b)=>String(a.em||a.data).localeCompare(String(b.em||b.data))).slice(-40);
+  d.historico = [...hist, {data:today(), em:new Date().toISOString(), acao:`juntado com ${outros.length} cadastro(s) duplicado(s)`, por:quemSou()}];
+  try{
+    await db.collection("leads").doc(p.id).update(d);
+    for(const o of outros) await db.collection("leads").doc(o.id).update({excluido:true, excluidoEm:today(), excluidoPor:quemSou(), juntadoCom:p.id});
+    return true;
+  }catch(err){ toast("Não foi possível juntar. Tente de novo."); return false; }
+}
+function temValor(v){ return v!==undefined && v!==null && String(v).trim()!==""; }
+function k_nome_ruim(l){ return !temNome(l.nome); }
 function proximaVendedora(atual){
   const candidatas = equipe.filter(n=>n!==atual); if(!candidatas.length) return null;
   const carga = n => leads.filter(l=>(l.responsavel===n || (!l.responsavel && l.filaDe===n)) && ["novo","negociando","agendado","informado"].includes(l.etapa)).length;
@@ -1485,9 +1653,19 @@ async function marcarEnviado_(l){
   await patch(l.id, {proximo:null, ultimoEnvio:t}, "mensagem enviada"); toast("Marcado como enviado");
 }
 
-const list = document.getElementById("list");
+const list = document.getElementById("zona");
 list.addEventListener("click", async e=>{
+  if(e.target.id==="ficha" || e.target.id==="fichaFechar"){ fichaId = null; render(); return; }
+  const fi = e.target.closest("[data-ficha]"); if(fi){ fichaId = fi.dataset.ficha; render(); return; }
+  if(e.target.id==="verMais"){ limite += 50; render(); return; }
+  if(e.target.id==="focoEntrar"){ focoAtivo = true; focoPulados.clear(); render(); window.scrollTo(0,0); return; }
+  if(e.target.id==="focoSair"){ focoAtivo = false; render(); return; }
+  if(e.target.id==="focoVoltar"){ focoPulados.clear(); render(); return; }
+  if(e.target.id==="focoPular"){ const c = document.querySelector("#list .card"); if(c) focoPulados.add(c.dataset.id); render(); return; }
   const wa = e.target.closest("[data-wa]");
+  if(wa && foraDeHorario() && !(avisoHorario[wa.dataset.wa] && Date.now()-avisoHorario[wa.dataset.wa] < 15000)){
+    e.preventDefault(); avisoHorario[wa.dataset.wa] = Date.now();
+    toast(`Agora são ${new Date().getHours()}h. O ideal é chamar entre 8h e 21h. Toque de novo em Abrir no WhatsApp para enviar mesmo assim.`); return; }
   if(wa){ const l = leads.find(x=>x.id===wa.dataset.wa); const eu = meuNome() || userEmail;
     if(l && isPool(l) && !(l.chamandoEm===today() && l.chamandoPor===eu)) patch(l.id, {chamandoPor:eu, chamandoEm:today()}, "começou a chamar");
     return; }
@@ -1557,7 +1735,7 @@ list.addEventListener("click", async e=>{
     if(phoneDigits(tel).length < 12){ toast("Confira o WhatsApp: informe DDD + número"); return; }
     const dp = findDup(tel, id); if(dp){ toast(dupTxt(dp)); return; }
     const ind = g("ind").value.trim();
-    const d = {nome, telefone:tel, curso:g("curso").value.trim(), origem: ind && !g("origem").value ? "Indicação" : g("origem").value, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind), antigo: g("antigo") ? g("antigo").checked : !!l.antigo};
+    const d = {nome, telefone:tel, curso:lerCurso(`ed-curso-${id}`), origem: ind && !g("origem").value ? "Indicação" : g("origem").value, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind), antigo: g("antigo") ? g("antigo").checked : !!l.antigo};
     if(g("bol")){ const b = g("bol").value;
       if(!b){ toast("Informe a data do 1º boleto"); return; }
       if(l.dataMatricula && b < l.dataMatricula){ toast("O 1º boleto não pode vencer antes da matrícula"); return; }
@@ -1577,7 +1755,7 @@ list.addEventListener("click", async e=>{
   }
   if(act==="del"){ confirmDel.add(id); render(); }
   if(act==="del-no"){ confirmDel.delete(id); render(); }
-  if(act==="del-ok"){ confirmDel.delete(id); try{ await db.collection("leads").doc(id).delete(); toast("Lead excluído"); }catch(err){ toast("Não foi possível excluir."); } }
+  if(act==="del-ok"){ confirmDel.delete(id); if(fichaId===id) fichaId = null; if(await patch(id, {excluido:true, excluidoEm:today(), excluidoPor:quemSou()}, "excluído (vai para a lixeira)")) toast(podeGerir() ? "Lead na lixeira. Dá para restaurar em Configurações → Lixeira" : "Lead excluído. A Isabella consegue recuperar em até 30 dias"); }
 });
 list.addEventListener("change", async e=>{
   const card = e.target.closest(".card"); if(!card) return; const id = card.dataset.id;
@@ -1618,17 +1796,46 @@ document.getElementById("chips").addEventListener("click", e=>{
   renderChips(); render();
 });
 document.querySelector(".tabs").addEventListener("click", e=>{
-  const b = e.target.closest(".tab"); if(!b) return; tab = b.dataset.tab;
+  const b = e.target.closest(".tab"); if(!b) return; tab = b.dataset.tab; limite = 50; if(tab!=="hoje") focoAtivo = false;
   document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x===b));
   render();
 });
-document.getElementById("busca").addEventListener("input", e=>{ busca = e.target.value; render(); });
+document.getElementById("busca").addEventListener("input", e=>{ busca = e.target.value; limite = 50; render(); });
 const fe = document.getElementById("filtroEtapa");
 fe.innerHTML = `<option value="">Todas as situações</option>` + Object.entries(STAGES).filter(([k,x])=>!x.oculto).map(([k,s])=>`<option value="${k}">${esc(s.label)}</option>`).join("");
 fe.addEventListener("change", e=>{ filtroEtapa = e.target.value; render(); });
 const fo = document.getElementById("filtroOrigem");
 fo.innerHTML = `<option value="">Todas as origens</option>` + ORIGENS.map(o=>`<option>${esc(o)}</option>`).join("");
 fo.addEventListener("change", e=>{ filtroOrigem = e.target.value; render(); });
+
+/* ---------- busca global ---------- */
+const qG = document.getElementById("qGlobal"), qR = document.getElementById("qRes");
+function buscarLeads(q){
+  const n = norm(q), dg = q.replace(/\D/g,"");
+  if(n.length < 2 && dg.length < 3) return null;
+  return leads.filter(l => (n.length>=2 && (norm(l.nome).includes(n) || norm(l.curso).includes(n))) || (dg.length>=3 && String(l.telefone||"").replace(/\D/g,"").includes(dg)))
+    .sort((a,b)=>(a.responsavel===meuNome()?0:1)-(b.responsavel===meuNome()?0:1) || String(b.criadoEm||"").localeCompare(String(a.criadoEm||""))).slice(0,10);
+}
+qG.addEventListener("input", ()=>{
+  const r = buscarLeads(qG.value.trim());
+  if(!r){ qR.hidden = true; return; }
+  qR.hidden = false;
+  qR.innerHTML = r.length ? r.map(l=>`<button type="button" data-abre="${esc(l.id)}"><b>${esc(nomeExib(l))}</b><small>${esc(phoneFmt(l.telefone))} · ${esc(l.responsavel || "Sem vendedora")} · ${esc((STAGES[l.etapa]||{}).label||"")}</small></button>`).join("")
+    : `<p class="note" style="padding:10px 12px">Nenhum lead com "${esc(qG.value.trim())}". <button class="btn" type="button" id="qNovo">Cadastrar como novo lead</button></p>`;
+});
+qR.addEventListener("click", e=>{
+  const b = e.target.closest("[data-abre]");
+  if(b){ fichaId = b.dataset.abre; qG.value = ""; qR.hidden = true; render(); return; }
+  if(e.target.id==="qNovo"){ const v = qG.value.trim(); qG.value = ""; qR.hidden = true; form.hidden = false; montarCursoForm(); syncExtras();
+    if(/\d{6,}/.test(v.replace(/\D/g,""))) document.getElementById("fTel").value = v; else document.getElementById("fNome").value = v;
+    window.scrollTo(0,0); }
+});
+document.addEventListener("click", e=>{ if(!e.target.closest(".busca-top")) qR.hidden = true; });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ if(fichaId){ fichaId = null; render(); } qR.hidden = true; } });
+
+/* ---------- sem internet ---------- */
+function atualizarOnline(){ document.getElementById("offline").hidden = navigator.onLine !== false; }
+window.addEventListener("online", atualizarOnline); window.addEventListener("offline", atualizarOnline); atualizarOnline();
 
 /* ---------- novo lead ---------- */
 const form = document.getElementById("formNovo");
@@ -1644,7 +1851,8 @@ document.getElementById("fInd").addEventListener("input", e=>{ if(e.target.value
 document.getElementById("fTel").addEventListener("input", e=>{ dupOk = false; const w = document.getElementById("dupWarn"); const dp = findDup(e.target.value);
   if(dp){ w.hidden = false; w.innerHTML = `<span>${esc(dupTxt(dp))}</span>`; } else w.hidden = true; });
 document.getElementById("dupWarn").addEventListener("click", e=>{ if(e.target.id==="dupSave"){ dupOk = true; form.requestSubmit(); } });
-document.getElementById("btnNovo").addEventListener("click", ()=>{ form.hidden = !form.hidden; if(!form.hidden){ syncExtras(); document.getElementById("fNome").focus(); } });
+function montarCursoForm(){ const b = document.getElementById("fCursoBox"); if(b) b.innerHTML = cursoSel("fCurso", ""); }
+document.getElementById("btnNovo").addEventListener("click", ()=>{ montarCursoForm(); form.hidden = !form.hidden; if(!form.hidden){ syncExtras(); document.getElementById("fNome").focus(); } });
 document.getElementById("btnCancelar").addEventListener("click", ()=>{ form.reset(); form.hidden = true; dupOk = false; document.getElementById("dupWarn").hidden = true; });
 form.addEventListener("submit", async e=>{
   e.preventDefault(); if(!db){ toast("Ainda conectando…"); return; }
@@ -1657,7 +1865,7 @@ form.addEventListener("submit", async e=>{
   const st = fEtapa.value; const x = readExtras(st, "f-"); if(x.err){ toast(x.err); return; }
   const base = {
     nome: document.getElementById("fNome").value.trim(), telefone: tel,
-    curso: document.getElementById("fCurso").value.trim(), responsavel: document.getElementById("fResp").value,
+    curso: lerCurso("fCurso"), responsavel: document.getElementById("fResp").value,
     origem, obs: document.getElementById("fObs").value.trim(), criadoEm: new Date().toISOString(), ultimoEnvio: null,
     indicadoPor: document.getElementById("fInd").value.trim(), indicadoPorId: alunoId(document.getElementById("fInd").value.trim()),
     antigo: document.getElementById("fAntigo").checked, cicloInicio: today(), ciclos: 1
@@ -1692,9 +1900,10 @@ function atualizarAdmin(){
   if(perm && tab!=="pos"){ tab = "pos"; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab==="pos")); render(); return; }
   if(!adm && (tab==="equipe" || tab==="config")){ tab = "inicio"; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab==="inicio")); render(); }
 }
-let migrou = false;
+let migrou = false, lixeira = [];
 async function migrarFluxo(){
-  if(migrou || !db || !podeGerir() || !leads.length) return; migrou = true;
+  if(migrou || !db || !podeGerir() || !(leads.length || lixeira.length)) return; migrou = true;
+  for(const l of lixeira) if(l.excluidoEm && diff(today(), l.excluidoEm) > 30){ try{ await db.collection("leads").doc(l.id).delete(); }catch(e){ break; } }
   const keys = POS.map(p=>p.k); let n = 0;
   for(const l of leads){
     const d = {};
@@ -1722,9 +1931,10 @@ auth.onAuthStateChanged(u=>{
   document.getElementById("banner").hidden = true;
   db = fs;
   const onErr = e => { if(e.code==="permission-denied") semAcesso(); else toast("Conexão perdida. Recarregue a página."); };
-  unsubs.push(db.collection("leads").onSnapshot(s=>{ leads = s.docs.map(x=>({id:x.id, ...x.data()})); atualizarAlunosList(); renderSnap(); migrarFluxo(); if(tab==="campanhas") renderCampList(); }, onErr));
+  unsubs.push(db.collection("leads").onSnapshot(s=>{ const todos = s.docs.map(x=>({id:x.id, ...x.data()})); leads = todos.filter(l=>!l.excluido); lixeira = todos.filter(l=>l.excluido); atualizarAlunosList(); renderSnap(); migrarFluxo(); if(tab==="campanhas") renderCampList(); }, onErr));
   unsubs.push(db.doc("config/mensagens").onSnapshot(s=>{ tpl = {...DEFAULT_TPL, ...(s.exists ? s.data() : {})}; renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/backup").onSnapshot(s=>{ backupInfo = s.exists ? s.data() : {}; renderSnap(); }, ()=>{}));
+  unsubs.push(db.doc("config/cursos").onSnapshot(s=>{ const l = s.exists && s.data().lista; CURSOS = Array.isArray(l) && l.length ? l : CURSOS_PADRAO.slice(); renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/recados").onSnapshot(s=>{ recados = s.exists && Array.isArray(s.data().itens) ? s.data().itens : []; renderSnap(); }, ()=>{}));
   unsubs.push(db.collection("lidos").onSnapshot(s=>{ lidos = {}; s.docs.forEach(x=>{ lidos[x.id] = x.data(); }); renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/metas").onSnapshot(s=>{ metas = s.exists ? {...s.data()} : {}; renderSnap(); }, ()=>{}));
