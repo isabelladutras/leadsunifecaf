@@ -321,6 +321,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
 <script>
 /* ---------- regras ---------- */
 const MAX_TENT = 3, RETRY_DIAS = 2, META_PADRAO = 30;
+const LIMITE_DIA = 60;   // máximo de contatos automáticos por vendedora por dia; o que passar vai para o dia seguinte
 const LONGO_DIAS = 15, CICLO_DIAS = 150, MAX_CICLOS = 2;   // depois de 3 tentativas: a cada 15 dias; 5 meses por vendedora; 2 vendedoras antes da lista fria
 const STAGES = {
   novo:        {label:"Ainda não respondeu",        dias:1,  tpl:"novo",       retry:true, hint:"lead novo, ninguém conversou ainda", grupo:"semresp"},
@@ -659,7 +660,7 @@ function cardHTML(l, full){
         <label class="f">Indicado por (aluno)<input type="text" id="ed-ind-${id}" list="alunosList" autocomplete="off" value="${esc(l.indicadoPor||"")}"></label>
         <label class="row" style="font-size:.88rem;font-weight:600;align-self:end"><input type="checkbox" id="ed-antigo-${id}"${l.antigo?" checked":""}> Lead antigo</label>
         <label class="f">Origem<select id="ed-origem-${id}"><option value="">Não sei ainda</option>${ORIGENS.map(o=>`<option${o===l.origem?" selected":""}>${esc(o)}</option>`).join("")}</select></label>
-        ${l.etapa==="matriculado"?`<label class="f">Vencimento do 1º boleto<input type="date" id="ed-bol-${id}" value="${esc(l.primeiroBoleto || firstDue(l) || "")}"></label>
+        ${l.etapa==="matriculado"?`<label class="f">Vencimento do 1º boleto*<input type="date" id="ed-bol-${id}" value="${esc(l.primeiroBoleto || "")}"></label>
         <label class="f">Início das aulas<input type="date" id="ed-ini-${id}" value="${esc(l.inicioAulas || "")}"></label>`:""}
       </div>
       <label class="f">Observações<textarea id="ed-obs-${id}">${esc(l.obs||"")}</textarea></label>
@@ -676,6 +677,10 @@ function cardHTML(l, full){
     ${canMsg && podeMexer(l)?`<details class="msg"${st.cls==="late"||st.cls==="today"?" open":""}><summary>Mensagem pronta${l.etapa==="matriculado"&&l.posAtual?` · ${esc(POS.find(p=>p.k===l.posAtual).label)}`:""}</summary>
       <textarea id="msg-${id}" data-draft="${id}">${esc(text)}</textarea></details>`:""}
     ${rotKey(l) && podeMexer(l) ? `<details class="msg"><summary>Roteiro do áudio · ${esc(rotKey(l)==="rot_novo" ? "primeiro contato" : objLabel(l.objecao))}</summary><div class="rot">${esc(tpl[rotKey(l)]).replace(/\n/g,"<br>")}</div></details>` : ""}
+    ${l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l) && !pendingEdit.has(l.id) ? `<div class="stagebox"><b>Falta a data do 1º boleto</b>
+      <p class="tplhelp">Obrigatório. Confira no sistema da faculdade e informe a data certa de vencimento do primeiro boleto.</p>
+      <div class="grid2"><label class="f">Vencimento do 1º boleto*<input type="date" id="qb-${id}"${l.dataMatricula?` min="${esc(l.dataMatricula)}"`:""}></label></div>
+      <div class="row"><button class="btn primary" type="button" data-act="salvaBol">Salvar data</button></div></div>` : ""}
     ${stageBox}${dateBox}${editBox}
     ${pendingNota.has(l.id) ? `<div class="stagebox"><b>Anotar</b>
       <label class="f">O que você quer registrar?<textarea id="nota-${id}" placeholder="Ex.: mãe vai pagar, prefere contato à noite, tem FIES…"></textarea></label>
@@ -817,7 +822,8 @@ function render(){
       if(l && l.id!==focoUltimo){ focoUltimo = l.id; window.scrollTo(0,0); }
       return;
     }
-    list.innerHTML = (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
+    const semBolH = isPerm() ? 0 : L.filter(l=>l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l)).length;
+    list.innerHTML = (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
                     : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula.")));
   } else if(tab==="agenda"){
@@ -850,7 +856,7 @@ function render(){
       return; }
     const ord = alunos.slice().sort((x,y)=>(y.risco?1:0)-(x.risco?1:0) || (x.primeiroBoleto?1:0)-(y.primeiroBoleto?1:0) || String(x.proximo||"9").localeCompare(String(y.proximo||"9")));
     const semBol = alunos.filter(l=>!l.primeiroBoleto).length, semIni = alunos.filter(l=>!l.inicioAulas).length;
-    list.innerHTML = ord.length ? (semBol ? `<div class="warn"><span><b>${semBol} aluno(s) sem a data do 1º boleto.</b> O lembrete do boleto deles usa uma data calculada, que pode estar errada. Abra <b>Editar dados</b> em cada um e informe a data certa.</span></div>` : "") + (false ? `<p class="note">${semIni} aluno(s) sem data de início das aulas.</p>` : "") + pag(ord) :
+    list.innerHTML = ord.length ? (semBol ? `<div class="warn"><span><b>${semBol} aluno(s) sem a data do 1º boleto.</b> A data é obrigatória: preencha no card de cada aluno (eles aparecem primeiro na lista).</span></div>` : "") + (false ? `<p class="note">${semIni} aluno(s) sem data de início das aulas.</p>` : "") + pag(ord) :
       emptyHTML("Nenhum aluno matriculado ainda","Quando um lead virar matrícula, mude a situação para <b>Matriculado</b> e informe a data do 1º boleto. A régua de contatos começa sozinha.");
   } else {
     const q = busca.trim().toLowerCase(); const qd = q.replace(/\D/g,"");
@@ -1579,8 +1585,18 @@ document.getElementById("equipeBox").addEventListener("click", async e=>{
 });
 
 /* ---------- ações nos cards ---------- */
-async function patch(id, data, acao){
+const donaDe = l => l.responsavel || l.filaDe || "";
+function diaLivre(quem, dia, ignorar){
+  if(!quem || !dia) return dia; let x = dia;
+  for(let i=0; i<120; i++){ if(leads.filter(o=>o.id!==ignorar && donaDe(o)===quem && o.proximo===x).length < LIMITE_DIA) return x; x = addDays(x,1); }
+  return dia;
+}
+async function patch(id, data, acao, opt){
   const l = leads.find(x=>x.id===id); if(!l) return false;
+  if(opt && opt.espalhar && typeof data.proximo==="string" && data.proximo>today()){
+    const quem = data.responsavel || (data.responsavel===undefined && data.filaDe===undefined ? donaDe(l) : data.filaDe) || "";
+    data = {...data, proximo: diaLivre(quem, data.proximo, id)};
+  }
   const historico = [...(l.historico||[]), {data: today(), em: new Date().toISOString(), acao, por: meuNome() || userEmail || ""}].slice(-20);
   try{ await db.collection("leads").doc(id).update({...data, ...patchExtra, historico}); return true; }
   catch(e){ toast(e.code==="permission-denied" ? "Seu e-mail não tem permissão para editar. Fale com a Isabella." : "Não salvou. Tente de novo."); return false; }
@@ -1626,7 +1642,7 @@ async function marcarEnviado_(l){
     return;
   }
   if(l.etapa==="agendado"){
-    await patch(l.id, {etapa:"negociando", tentativas:1, proximo:addDays(t,RETRY_DIAS), ultimoEnvio:t}, `retomado o contato pedido (tentativa 1 de ${MAX_TENT})`);
+    await patch(l.id, {etapa:"negociando", tentativas:1, proximo:addDays(t,RETRY_DIAS), ultimoEnvio:t}, `retomado o contato pedido (tentativa 1 de ${MAX_TENT})`, {espalhar:true});
     toast(`Enviado. Se não responder, volta em ${RETRY_DIAS} dias`); return;
   }
   if(s.retry){
@@ -1642,12 +1658,12 @@ async function marcarEnviado_(l){
       const outra = proximaVendedora(atual);
       const d = {etapa:"novo", tentativas:0, cicloInicio:t, ciclos:ciclos+1, reapresentar:true, proximo:addDays(t,1), ultimoEnvio:t, objecao:null, resumo:""};
       if(l.responsavel) d.responsavel = outra || l.responsavel; else d.filaDe = outra || l.filaDe || null;
-      await patch(l.id, d, `5 meses sem resposta com ${atual||"a equipe"} → passado para ${outra||"—"} com mensagem de apresentação`);
+      await patch(l.id, d, `5 meses sem resposta com ${atual||"a equipe"} → passado para ${outra||"—"} com mensagem de apresentação`, {espalhar:true});
       toast(`5 meses sem resposta. Lead passado para ${outra}, que vai se apresentar amanhã`); return;
     }
     const prox = n < MAX_TENT ? RETRY_DIAS : LONGO_DIAS;
     await patch(l.id, {tentativas:n, proximo:addDays(t,prox), ultimoEnvio:t, ...(l.cicloInicio ? {} : {cicloInicio:ini, ciclos})},
-      n <= MAX_TENT ? `mensagem enviada (tentativa ${n} de ${MAX_TENT})` : `mensagem enviada (tentativa ${n}, de 15 em 15 dias)`);
+      n <= MAX_TENT ? `mensagem enviada (tentativa ${n} de ${MAX_TENT})` : `mensagem enviada (tentativa ${n}, de 15 em 15 dias)`, {espalhar:true});
     toast(`Enviado. Se não responder, volta em ${prox} dias`);
     return;
   }
@@ -1701,7 +1717,7 @@ list.addEventListener("click", async e=>{
     else { pendingStage.set(id, "negociando"); render(); }
     return;
   }
-  if(act==="risco"){ if(await patch(id, {risco:true, riscoAvisado:null}, "marcado em risco para a Permanência")) toast("Aluno marcado em risco. A Permanência vê no topo da lista dela"); return; }
+  if(act==="risco"){ if(await patch(id, {risco:true, riscoAvisado:null, riscoRevisado:true}, "marcado em risco para a Permanência")) toast("Aluno marcado em risco. A Permanência vê no topo da lista dela"); return; }
   if(act==="ctx"){ pendingCtxOnly.add(id); pendingStage.set(id, "negociando"); render(); return; }
   if(act==="nota"){ pendingNota.add(id); render(); setTimeout(()=>{ const t = document.getElementById(`nota-${id}`); if(t) t.focus(); },0); return; }
   if(act==="nota-no"){ pendingNota.delete(id); render(); return; }
@@ -1729,6 +1745,11 @@ list.addEventListener("click", async e=>{
     if(pendingPegar.has(id)){ const nome = meuNome(); d = {...d, responsavel:nome, filaDe:null, chamandoPor:null, chamandoEm:null}; h = `respondeu → ficou com ${nome} · ${h}`; }
     if(await patch(id, d, h)){ const pg = pendingPegar.has(id); pendingStage.delete(id); pendingPegar.delete(id); toast(pg ? `Lead agora é seu, ${firstName(meuNome())}. Próximo contato em 3 dias` : `${STAGES[st].label}: salvo`); render(); }
   }
+  if(act==="salvaBol"){ const b = (document.getElementById(`qb-${id}`)||{}).value || "";
+    if(!b){ toast("Escolha a data do 1º boleto"); return; }
+    if(l.dataMatricula && b < l.dataMatricula){ toast("O 1º boleto não pode vencer antes da matrícula"); return; }
+    const d = {primeiroBoleto:b, diaVencimento:Number(b.slice(8,10))}; const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date;
+    if(await patch(id, d, `1º boleto informado: ${brAno(b)}`)) toast("Data do 1º boleto salva"); return; }
   if(act==="edit"){ pendingEdit.add(id); render(); }
   if(act==="edit-no"){ pendingEdit.delete(id); render(); }
   if(act==="edit-ok"){
@@ -1914,6 +1935,8 @@ async function migrarFluxo(){
         Object.assign(d, {etapa:"novo", tentativas:MAX_TENT, proximo:maxDate(addDays(h.data, LONGO_DIAS), today()), motivoPerda:null, perdidoEm:null, voltouCadencia:true, cicloInicio: l.cicloInicio || String(l.criadoEm||"").slice(0,10) || today(), ciclos: l.ciclos || 1}); } }
     if(l.etapa==="perdido") d.etapa = "frio";
     if(!d.voltouCadencia && (l.etapa==="frio" || l.etapa==="perdido") && (l.proximo || !l.motivoPerda)){ d.proximo = null; if(!l.motivoPerda) d.motivoPerda = "Parou de responder"; if(!l.perdidoEm) d.perdidoEm = today(); }
+    if(l.risco && !l.riscoRevisado && !(l.historico||[]).some(h=>/marcado em risco para a Permanência/.test(h.acao||""))){
+      Object.assign(d, {risco:false, riscoAvisado:null, posSemResposta:0, riscoRevisado:true}); }
     if(l.etapa==="matriculado" && l.posAtual && !keys.includes(l.posAtual)){
       const feitos = (l.posFeitos||[]).filter(k=>keys.includes(k));
       const nx = nextPos({...l, posFeitos:feitos}); d.posAtual = nx.key; d.proximo = nx.date;
@@ -1921,6 +1944,30 @@ async function migrarFluxo(){
     if(Object.keys(d).length){ try{ await db.collection("leads").doc(l.id).update(d); n++; }catch(e){ break; } }
   }
   if(n) toast(`${n} lead(s) ajustados para o novo fluxo`);
+  await espalharAgenda();
+}
+// Redistribui os retornos automáticos (sem resposta) de amanhã em diante: no máximo LIMITE_DIA por vendedora por dia.
+// Não mexe em datas pedidas pelo lead, conversas em andamento nem pós-matrícula.
+async function espalharAgenda(){
+  const t = today(), amanha = addDays(t,1);
+  const flex = l => l.etapa==="novo" || (l.etapa==="negociando" && !l.resumoEm && (l.tentativas||0)>0);
+  const quem = [...new Set(leads.map(donaDe).filter(Boolean))]; let movidos = 0;
+  for(const q of quem){
+    const meus = leads.filter(l=>donaDe(l)===q && l.proximo && l.proximo>=amanha);
+    const cont = {}; for(const l of meus) cont[l.proximo] = (cont[l.proximo]||0)+1;
+    const dias = Object.keys(cont).sort();
+    for(const dia of dias){
+      if(cont[dia] <= LIMITE_DIA) continue;
+      const mov = meus.filter(l=>l.proximo===dia && flex(l)).sort((a,b)=>(b.tentativas||0)-(a.tentativas||0) || String(a.criadoEm||"").localeCompare(String(b.criadoEm||"")));
+      for(const l of mov){
+        if(cont[dia] <= LIMITE_DIA) break;
+        let x = addDays(dia,1); while((cont[x]||0) >= LIMITE_DIA) x = addDays(x,1);
+        try{ await db.collection("leads").doc(l.id).update({proximo:x}); }catch(e){ return; }
+        cont[dia]--; cont[x] = (cont[x]||0)+1; l.proximo = x; movidos++;
+      }
+    }
+  }
+  if(movidos) toast(`${movidos} retorno(s) redistribuídos: no máximo ${LIMITE_DIA} por vendedora por dia`);
 }
 function semAcesso(){ const b = document.getElementById("banner"); b.hidden = false;
   b.textContent = "Seu e-mail ainda não está na equipe. Peça para a Isabella adicionar você na aba Equipe com este mesmo e-mail e depois recarregue a página."; }
