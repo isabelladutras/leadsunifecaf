@@ -333,7 +333,10 @@ input[type=file]{font-size:.88rem;max-width:100%}
 /* ---------- regras ---------- */
 const MAX_TENT = 3, RETRY_DIAS = 2, META_PADRAO = 30;
 const LIMITE_DIA = 60;   // máximo de contatos automáticos por vendedora por dia; o que passar vai para o dia seguinte
-const LONGO_DIAS = 15, CICLO_DIAS = 150, MAX_CICLOS = 2;   // depois de 3 tentativas: a cada 15 dias; 5 meses por vendedora; 2 vendedoras antes da lista fria
+const LONGO_DIAS = 15, CICLO_DIAS = 150, MAX_CICLOS = 2;   // quem já respondeu (Em atendimento) e sumiu: depois de 3 tentativas, a cada 15 dias; 5 meses por vendedora
+// Quem NUNCA respondeu: rodízio entre 3 vendedoras, 3 mensagens cada, com intervalos cada vez maiores.
+// gaps = dias entre a 1ª e a 2ª, e entre a 2ª e a 3ª mensagem; passa = dias até a próxima vendedora se apresentar.
+const RODIZIO = [{gaps:[4,7], passa:7}, {gaps:[7,14], passa:14}, {gaps:[14,30], passa:null}];
 const STAGES = {
   novo:        {label:"Ainda não respondeu",        dias:1,  tpl:"novo",       retry:true, hint:"lead novo, ninguém conversou ainda", grupo:"semresp"},
   negociando:  {label:"Em atendimento",             dias:3,  tpl:"negociando", retry:true, hint:"o lead respondeu e está conversando", grupo:"atend"},
@@ -364,6 +367,7 @@ const POS = [
 ];
 const DEFAULT_TPL = {
   novo: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Posso te enviar alguns áudios explicando sobre a faculdade e os valores?\n---\nOi, {nome}! Aqui é a {responsavel}, do polo UniFECAF 😊 Vi seu interesse em fazer faculdade. Posso te mandar um áudio rapidinho com os cursos e valores?\n---\nOlá, {nome}! Tudo certo? Sou a {responsavel}, do polo UniFECAF. Quer que eu te explique por áudio como funcionam as aulas e as condições de matrícula?",
+  novo_retorno: "Oi, {nome}! Te chamei há uns dias e não sei se você viu. Você ainda quer fazer faculdade? Me responde com o curso que te interessa que eu te mando os valores e a condição deste mês.\n---\n{nome}, quero te passar a condição de matrícula deste mês antes que ela mude. Me responde só com SIM que eu te explico tudo num áudio de 1 minuto.\n---\nOi, {nome}! Consigo te passar hoje os valores e as formas de pagamento do curso que você quiser, sem compromisso. Qual área você prefere: gestão, saúde, tecnologia, educação ou engenharia?\n---\n{nome}, ainda dá tempo de entrar na próxima turma. Quer que eu reserve a sua vaga? É só me responder que eu te passo o passo a passo.\n---\nOi, {nome}! Muita gente começa a faculdade pagando menos do que imagina. Quer que eu faça uma simulação do valor do seu curso? Leva 2 minutos.\n---\n{nome}, vou encerrar o seu atendimento por aqui para não te incomodar. Se ainda quiser fazer faculdade, me responde agora que eu te passo tudo. 😊",
   informado: "Oi, {nome}! Ficou com alguma dúvida sobre o curso de {curso}? Pergunto porque estamos com uma condição especial de matrícula e queria te passar antes de encerrar.",
   negociando: "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se tiver qualquer dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\nOi, {nome}, tudo bem? Passando para saber se ficou alguma dúvida sobre o curso de {curso}. Estou por aqui!\n---\n{nome}, tudo certo? Queria saber o que você achou das informações do curso de {curso}. Posso te ajudar em algo?",
   agendado: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Você tinha me pedido para te chamar agora, {motivo}. Ainda faz sentido conversarmos sobre o curso de {curso}?",
@@ -375,7 +379,7 @@ const DEFAULT_TPL = {
   obj_documentos: "Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?",
   obj_sumiu: "Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?",
   antigo: "Oi! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Há um tempo você conversou com a gente sobre fazer faculdade. Ainda tem interesse? Estamos com condições novas de matrícula e posso te passar tudo rapidinho. 😊\n---\nOlá! Aqui é a {responsavel}, do polo UniFECAF. Você falou com a gente um tempo atrás sobre graduação. Ainda pensa em começar? Tenho novidades nas condições deste mês.\n---\nOi, tudo bem? Sou a {responsavel}, do polo UniFECAF 😊 Estou retomando o contato com quem pediu informações sobre faculdade. Ainda faz sentido para você?",
-  reapresentacao: "Oi! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Agora sou eu quem vai te acompanhar por aqui. Você ainda pensa em fazer faculdade? Posso te mandar as condições deste mês?",
+  reapresentacao: "Oi, {nome}! Aqui é a {responsavel}, do polo UniFECAF, e agora sou eu quem vai te acompanhar. Você ainda quer fazer faculdade? Me diz o curso que te interessa que eu te mando as condições deste mês.\n---\nOi, {nome}! Tudo bem? Sou a {responsavel}, do polo UniFECAF, e vou cuidar do seu atendimento a partir de agora. Qual curso você tem vontade de fazer? Te passo valores e condições hoje mesmo.",
   rot_antigo: "• Se apresente: seu nome e que é do polo UniFECAF\n• Diga que a pessoa conversou com o polo há um tempo (sem cobrar)\n• Pergunte se ainda tem interesse e qual curso\n• Ofereça mandar as condições do mês em um áudio curto",
   obj_semtempo: "Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊",
   obj_conversando: "Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?",
@@ -400,10 +404,10 @@ const DEFAULT_TPL = {
   pos_remat: "Oi, {nome}! A rematrícula do próximo semestre está chegando. Quer que eu te ajude a garantir a sua vaga no curso de {curso}?"
 };
 const TPL_GROUPS = [
-  {title:"Leads", keys:[["novo","Ainda não respondeu"],["negociando","Em atendimento (quando não há conversa registrada)"],["agendado","Pediu para chamar depois"],["frio","Parou de responder (nova tentativa após 30 dias)"]]},
+  {title:"Leads", keys:[["novo","Ainda não respondeu: primeira mensagem"],["novo_retorno","Ainda não respondeu: 2ª e 3ª mensagens de cada vendedora (em ordem: as 2 primeiras são da 1ª vendedora, as 2 seguintes da 2ª e as 2 últimas da 3ª)"],["negociando","Em atendimento (quando não há conversa registrada)"],["agendado","Pediu para chamar depois"],["frio","Parou de responder (nova tentativa após 30 dias)"]]},
   {title:"Follow-up pelo que travou (substitui a mensagem de Recebeu informações, Em conversa e Frio)", keys:OBJECOES.map(([k,t])=>["obj_"+k, t])},
   {title:"Roteiros de áudio (tópicos do que falar)", keys:[["rot_novo","Primeiro áudio (lead novo)"], ...OBJECOES.map(([k,t])=>["rot_"+k, t])]},
-  {title:"Apresentação", keys:[["antigo","Lead antigo (não sabemos nada dele)"],["reapresentacao","Lead passado para outra vendedora depois de 5 meses sem resposta"],["rot_antigo","Roteiro do áudio para lead antigo"]]},
+  {title:"Apresentação", keys:[["antigo","Lead antigo (não sabemos nada dele)"],["reapresentacao","Lead passado para outra vendedora porque não respondeu"],["rot_antigo","Roteiro do áudio para lead antigo"]]},
   {title:"Pós-matrícula (única mensagem do comercial)", keys:[["pos_semana","7 dias após o início das aulas (ou da matrícula, se o início não foi informado)"]]}
 ];
 
@@ -525,12 +529,15 @@ function rotKey(l){
 function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual==="pos_d7" ? "pos_semana" : null;
   if(l.etapa==="novo" && (l.tentativas||0)===0 && l.reapresentar) return "reapresentacao";
   if(l.etapa==="novo" && (l.tentativas||0)===0 && l.antigo) return "antigo";
+  if(l.etapa==="novo" && (l.tentativas||0)>0 && tpl.novo_retorno) return "novo_retorno";
   if(["informado","negociando","frio"].includes(l.etapa) && l.objecao && tpl["obj_"+l.objecao]) return "obj_"+l.objecao; const s = STAGES[l.etapa]; return s && s.tpl || null; }
 function hashStr(x){ let h = 0; for(const c of String(x||"")) h = (h*31 + c.charCodeAt(0)) >>> 0; return h; }
-function variacao(t, l){ const partes = String(t).split(/\n\s*---\s*\n/).map(x=>x.trim()).filter(Boolean); if(partes.length<2) return partes[0] || "";
+function variacao(t, l, k){ const partes = String(t).split(/\n\s*---\s*\n/).map(x=>x.trim()).filter(Boolean); if(partes.length<2) return partes[0] || "";
+  if(k==="novo_retorno"){ const n = partes.length, c = Math.min(Math.max((l.ciclos||1),1), RODIZIO.length) - 1, tt = Math.min(Math.max(l.tentativas||1,1), 2);
+    return partes[(c*2 + tt - 1) % n]; }   // em ordem, por vendedora: nunca repete a mensagem anterior
   return partes[(hashStr(l.id) + (l.tentativas||0)) % partes.length]; }
 function fillTpl(l){
-  const k = tplKey(l); const t = k ? variacao(tpl[k] || "", l) : "";
+  const k = tplKey(l); const t = k ? variacao(tpl[k] || "", l, k) : "";
   const f = firstDue(l);
   return trocaNome(t, l.nome)
           .replaceAll("{curso}", l.curso || "graduação")
@@ -636,7 +643,7 @@ function cardHTML(l, full){
   if(isPool(l) && l.chamandoEm===today() && l.chamandoPor) pills.push(`<span class="pill today">${l.chamandoPor===meuNome() ? "Você está chamando" : `${esc(firstName(l.chamandoPor))} está chamando`}</span>`);
   if(l.antigo && l.etapa==="novo") pills.push(`<span class="pill muted">Lead antigo</span>`);
   if(l.reapresentar && l.etapa==="novo") pills.push(`<span class="pill muted">Veio de outra vendedora</span>`);
-  if(stage.retry && l.tentativas) pills.push(`<span class="pill muted">${l.tentativas<=MAX_TENT ? `Tentativa ${l.tentativas} de ${MAX_TENT}` : `${l.tentativas} tentativas · de 15 em 15 dias`}</span>`);
+  if(stage.retry && l.tentativas) pills.push(`<span class="pill muted">${l.etapa==="novo" ? `Mensagem ${Math.min(l.tentativas,MAX_TENT)} de ${MAX_TENT} · vendedora ${Math.min(l.ciclos||1,RODIZIO.length)} de ${RODIZIO.length}` : l.tentativas<=MAX_TENT ? `Tentativa ${l.tentativas} de ${MAX_TENT}` : `${l.tentativas} tentativas · de 15 em 15 dias`}</span>`);
   pills.push(`<span class="pill ${st.cls}">${esc(st.txt)}</span>`);
 
   let info = [];
@@ -1061,7 +1068,7 @@ function guiaHTML(){
   const it = (rot, quando) => `<li><b>${rot}</b>: ${quando}</li>`;
   return `<details class="panel"><summary style="cursor:pointer;font-weight:600">Como marcar cada situação</summary>
     <ul style="margin:.4rem 0 0;padding-left:1.1rem;line-height:1.6;font-size:.9rem">
-      ${it("Ainda não respondeu","ninguém conseguiu conversar ainda. As 3 primeiras tentativas são a cada 2 dias; depois, a cada 15 dias. Depois de 5 meses sem resposta, o lead passa sozinho para outra vendedora, que se apresenta de novo. Se continuar sem resposta por mais 5 meses, vai para a Lista fria.")}
+      ${it("Ainda não respondeu","ninguém conseguiu conversar ainda. Cada vendedora manda 3 mensagens, com intervalos cada vez maiores (1ª vendedora: hoje, +4 dias, +7 dias). Sem resposta, o lead passa sozinho para outra vendedora, que se apresenta e manda mais 3 (intervalos de 7 e 14 dias); depois para uma terceira (14 e 30 dias). Se ninguém conseguir resposta, vai para a Lista fria e passa a receber só ofertas.")}
       ${it("Em atendimento","o lead respondeu. Clique em <b>Respondeu</b> e, depois disso, em <b>Registrar conversa</b> sempre que falar com ele.")}
       ${it("Pediu para chamar depois","o lead pediu para ser chamado numa data (ex.: \"me chama em janeiro\"). Some das listas e volta sozinho nesse dia.")}
       ${it("Matriculado","fechou. A vendedora manda só uma mensagem, 7 dias depois do início das aulas; o resto é com a Permanência.")}
@@ -1669,10 +1676,33 @@ async function juntarLeads(g){
 }
 function temValor(v){ return v!==undefined && v!==null && String(v).trim()!==""; }
 function k_nome_ruim(l){ return !temNome(l.nome); }
-function proximaVendedora(atual){
-  const candidatas = equipe.filter(n=>n!==atual); if(!candidatas.length) return null;
+function proximaVendedora(atual, excluir){
+  const fora = new Set([atual, ...(excluir||[])]);
+  let candidatas = equipe.filter(n=>!fora.has(n)); if(!candidatas.length) candidatas = equipe.filter(n=>n!==atual); if(!candidatas.length) return null;
   const carga = n => leads.filter(l=>(l.responsavel===n || (!l.responsavel && l.filaDe===n)) && ["novo","negociando","agendado","informado"].includes(l.etapa)).length;
   return candidatas.sort((a,b)=>carga(a)-carga(b))[0];
+}
+// Quem nunca respondeu: 3 mensagens por vendedora; na 3ª sem resposta, passa para a próxima (até 3 vendedoras) e depois Lista fria.
+function dadosPassagem(l, t, quando){
+  const ciclos = l.ciclos || 1, atual = l.responsavel || l.filaDe || l.chamandoPor || meuNome() || "";
+  if(ciclos >= RODIZIO.length) return {d:{etapa:"frio", tentativas:0, proximo:null, motivoPerda:"Não respondeu 3 vendedoras", perdidoEm:t, reapresentar:false},
+    h:`${RODIZIO.length} vendedoras sem resposta → Lista fria`, msg:`Sem resposta com ${RODIZIO.length} vendedoras. Lead foi para a Lista fria e passa a receber só ofertas`};
+  const tentaram = [...new Set([...(l.tentaram||[]), atual].filter(Boolean))];
+  const outra = proximaVendedora(atual, tentaram);
+  const d = {etapa:"novo", tentativas:0, cicloInicio:t, ciclos:ciclos+1, reapresentar:true, tentaram, proximo:quando, objecao:null, resumo:""};
+  if(l.responsavel) d.responsavel = outra || l.responsavel; else d.filaDe = outra || l.filaDe || null;
+  return {d, h:`sem resposta com ${atual||"a equipe"} → passado para ${outra||"—"}, que vai se apresentar`, msg:`Sem resposta após ${MAX_TENT} mensagens. Lead passa para ${outra}, que se apresenta em ${br(quando)}`};
+}
+async function enviarRodizio(l, t){
+  const n = (l.tentativas||0)+1, c = Math.min(l.ciclos||1, RODIZIO.length), r = RODIZIO[c-1];
+  if(n < MAX_TENT){
+    const prox = r.gaps[n-1];
+    await patch(l.id, {tentativas:n, proximo:addDays(t,prox), ultimoEnvio:t, ...(l.cicloInicio ? {} : {cicloInicio:t, ciclos:c})}, `mensagem enviada (${n} de ${MAX_TENT}, vendedora ${c} de ${RODIZIO.length})`, {espalhar:true});
+    toast(`Enviado. Se não responder, volta em ${prox} dias`); return;
+  }
+  const p = dadosPassagem(l, t, addDays(t, r.passa || 1));
+  await patch(l.id, {...p.d, ultimoEnvio:t}, `mensagem enviada (${MAX_TENT} de ${MAX_TENT}) · ${p.h}`, p.d.proximo ? {espalhar:true} : undefined);
+  toast(p.msg);
 }
 async function marcarEnviado(l){
   patchExtra = isPool(l) ? {chamandoPor: meuNome() || userEmail, chamandoEm: today()} : {};
@@ -1691,6 +1721,7 @@ async function marcarEnviado_(l){
     await patch(l.id, {etapa:"negociando", tentativas:1, proximo:addDays(t,RETRY_DIAS), ultimoEnvio:t}, `retomado o contato pedido (tentativa 1 de ${MAX_TENT})`, {espalhar:true});
     toast(`Enviado. Se não responder, volta em ${RETRY_DIAS} dias`); return;
   }
+  if(l.etapa==="novo"){ await enviarRodizio(l, t); return; }
   if(s.retry){
     const n = (l.tentativas||0)+1;
     const ini = l.cicloInicio || String(l.criadoEm||"").slice(0,10) || t;
@@ -1983,6 +2014,11 @@ async function migrarFluxo(){
       if(l.etapa==="frio" && !l.voltouCadencia && h && /tentativas sem resposta/.test(h.acao) && !/5 meses/.test(h.acao)){
         Object.assign(d, {etapa:"novo", tentativas:MAX_TENT, proximo:maxDate(addDays(h.data, LONGO_DIAS), today()), motivoPerda:null, perdidoEm:null, voltouCadencia:true, cicloInicio: l.cicloInicio || String(l.criadoEm||"").slice(0,10) || today(), ciclos: l.ciclos || 1}); } }
     if(l.etapa==="perdido") d.etapa = "frio";
+    if(!Object.keys(d).length && l.etapa==="novo" && (l.tentativas||0) >= MAX_TENT){
+      const p = dadosPassagem(l, today(), maxDate(l.proximo || today(), today()));
+      Object.assign(d, p.d); if(d.proximo){ const quem = d.responsavel || d.filaDe || ""; d.proximo = diaLivre(quem, d.proximo, l.id); }
+      d.historico = [...(l.historico||[]), {data:today(), em:new Date().toISOString(), acao:`novo rodízio: ${p.h}`, por:"sistema"}].slice(-20);
+      if(d.responsavel) l.responsavel = d.responsavel; if(d.filaDe) l.filaDe = d.filaDe; if(d.proximo) l.proximo = d.proximo; }
     if(!d.voltouCadencia && (l.etapa==="frio" || l.etapa==="perdido") && (l.proximo || !l.motivoPerda)){ d.proximo = null; if(!l.motivoPerda) d.motivoPerda = "Parou de responder"; if(!l.perdidoEm) d.perdidoEm = today(); }
     if(l.risco && !l.riscoRevisado && !(l.historico||[]).some(h=>/marcado em risco para a Permanência/.test(h.acao||""))){
       Object.assign(d, {risco:false, riscoAvisado:null, posSemResposta:0, riscoRevisado:true}); }
