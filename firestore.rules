@@ -1,9 +1,9 @@
 rules_version = '2';
 
 // Quem acessa:
-// - a administradora (e-mail abaixo) sempre acessa e é a única que muda a equipe;
-// - as vendedoras ativas cadastradas na aba Equipe do site acessam os leads.
-// Ao contratar alguém, basta adicioná-la na aba Equipe e criar o login dela em Authentication.
+// - a administradora (e-mail abaixo) acessa e altera tudo;
+// - as vendedoras veem todos os leads, mas só alteram os delas e os que estão sem vendedora;
+// - a Permanência vê os leads e altera só os alunos matriculados; também acessa o painel acadêmico.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -14,23 +14,52 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
     function ehAdmin() {
-      return logada() && email() in ['email-da-isabella@exemplo.com'];
+      return logada() && email() in ['bellasdutra16@gmail.com'];
+    }
+    function equipe() {
+      return get(/databases/$(database)/documents/config/equipe).data;
+    }
+    function temEquipe() {
+      return exists(/databases/$(database)/documents/config/equipe);
     }
     function daEquipe() {
-      return logada() && (
-        ehAdmin() ||
-        (exists(/databases/$(database)/documents/config/equipe) &&
-         email() in get(/databases/$(database)/documents/config/equipe).data.get('emails', []))
-      );
+      return logada() && (ehAdmin() || (temEquipe() && email() in equipe().get('emails', [])));
+    }
+    function doAcademico() {
+      return logada() && (ehAdmin() || (temEquipe() && email() in equipe().get('emailsAcademico', [])));
+    }
+    function meuNome() {
+      return equipe().get('nomePorEmail', {}).get(email(), '__sem_nome__');
+    }
+    function donaDoLead() {
+      return resource.data.get('responsavel', '') == '' || resource.data.get('responsavel', '') == meuNome();
     }
 
     match /leads/{id} {
-      allow read, write: if daEquipe();
+      allow read: if daEquipe();
+      allow create: if daEquipe();
+      allow update: if ehAdmin()
+        || (daEquipe() && !(email() in equipe().get('emailsAcademico', [])) && donaDoLead())
+        || (doAcademico() && resource.data.get('etapa', '') == 'matriculado');
+      allow delete: if ehAdmin();
     }
 
     match /config/{doc} {
       allow read: if daEquipe();
-      allow write: if (doc != 'equipe' && daEquipe()) || ehAdmin();
+      allow write: if ehAdmin();
+    }
+
+    match /lidos/{doc} {
+      allow read, write: if daEquipe();
+    }
+
+    // Números excluídos (não existem): ficam bloqueados para não voltarem por planilha ou cadastro.
+    match /bloqueados/{tel} {
+      allow read, write: if daEquipe();
+    }
+
+    match /academico/{doc} {
+      allow read, write: if doAcademico();
     }
   }
 }

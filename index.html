@@ -332,7 +332,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
 <script>
 /* ---------- regras ---------- */
 const MAX_TENT = 3, RETRY_DIAS = 2, META_PADRAO = 30;
-const LIMITE_DIA = 60;   // máximo de contatos automáticos por vendedora por dia; o que passar vai para o dia seguinte
+const LIMITE_DIA = 100;   // máximo de contatos automáticos por vendedora por dia; o que passar vai para o dia seguinte
 const LONGO_DIAS = 15, CICLO_DIAS = 150, MAX_CICLOS = 2;   // quem já respondeu (Em atendimento) e sumiu: depois de 3 tentativas, a cada 15 dias; 5 meses por vendedora
 // Quem NUNCA respondeu: rodízio entre 3 vendedoras, 3 mensagens cada, com intervalos cada vez maiores.
 // gaps = dias entre a 1ª e a 2ª, e entre a 2ª e a 3ª mensagem; passa = dias até a próxima vendedora se apresentar.
@@ -340,7 +340,7 @@ const RODIZIO = [{gaps:[4,7], passa:7}, {gaps:[7,14], passa:14}, {gaps:[14,30], 
 const STAGES = {
   novo:        {label:"Ainda não respondeu",        dias:1,  tpl:"novo",       retry:true, hint:"lead novo, ninguém conversou ainda", grupo:"semresp"},
   negociando:  {label:"Em atendimento",             dias:3,  tpl:"negociando", retry:true, hint:"o lead respondeu e está conversando", grupo:"atend"},
-  informado:   {label:"Em atendimento",             dias:1,  tpl:"informado",  retry:true, hint:"o lead respondeu e está conversando", grupo:"atend", oculto:true},
+  informado:   {label:"Informações enviadas",       dias:1,  tpl:"informado",  retry:true, hint:"já mandou valores e informações e a pessoa não respondeu; volta em 2 h 30 no mesmo dia", grupo:"atend"},
   agendado:    {label:"Pediu para chamar depois",   dias:null, tpl:"agendado", retry:true, hint:"volta sozinho na data pedida", grupo:"agendado"},
   frio:        {label:"Lista fria",                 dias:null, tpl:"frio", motivo:true, hint:"parou de responder ou desistiu; recebe novas ofertas", grupo:"fria"},
   matriculado: {label:"Matriculado",                dias:null, pos:true,       hint:"virou aluno", grupo:"mat"},
@@ -368,7 +368,7 @@ const POS = [
 const DEFAULT_TPL = {
   novo: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Posso te enviar alguns áudios explicando sobre a faculdade e os valores?\n---\nOi, {nome}! Aqui é a {responsavel}, do polo UniFECAF 😊 Vi seu interesse em fazer faculdade. Posso te mandar um áudio rapidinho com os cursos e valores?\n---\nOlá, {nome}! Tudo certo? Sou a {responsavel}, do polo UniFECAF. Quer que eu te explique por áudio como funcionam as aulas e as condições de matrícula?",
   novo_retorno: "Oi, {nome}! Te chamei há uns dias e não sei se você viu. Você ainda quer fazer faculdade? Me responde com o curso que te interessa que eu te mando os valores e a condição deste mês.\n---\n{nome}, quero te passar a condição de matrícula deste mês antes que ela mude. Me responde só com SIM que eu te explico tudo num áudio de 1 minuto.\n---\nOi, {nome}! Consigo te passar hoje os valores e as formas de pagamento do curso que você quiser, sem compromisso. Qual área você prefere: gestão, saúde, tecnologia, educação ou engenharia?\n---\n{nome}, ainda dá tempo de entrar na próxima turma. Quer que eu reserve a sua vaga? É só me responder que eu te passo o passo a passo.\n---\nOi, {nome}! Muita gente começa a faculdade pagando menos do que imagina. Quer que eu faça uma simulação do valor do seu curso? Leva 2 minutos.\n---\n{nome}, vou encerrar o seu atendimento por aqui para não te incomodar. Se ainda quiser fazer faculdade, me responde agora que eu te passo tudo. 😊",
-  informado: "Oi, {nome}! Ficou com alguma dúvida sobre o curso de {curso}? Pergunto porque estamos com uma condição especial de matrícula e queria te passar antes de encerrar.",
+  informado: "Oi, {nome}! Conseguiu ver as informações que te mandei sobre {curso}? Ficou com alguma dúvida? Se estiver tudo certo, já podemos prosseguir com a sua matrícula 😊\n---\n{nome}, ficou alguma dúvida sobre o que te enviei? Se quiser, já te passo o passo a passo para garantir a sua vaga com a condição de hoje.\n---\nOi, {nome}! Viu os valores de {curso}? Me fala se ficou alguma dúvida, ou se podemos seguir com a matrícula.",
   negociando: "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se tiver qualquer dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\nOi, {nome}, tudo bem? Passando para saber se ficou alguma dúvida sobre o curso de {curso}. Estou por aqui!\n---\n{nome}, tudo certo? Queria saber o que você achou das informações do curso de {curso}. Posso te ajudar em algo?",
   agendado: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Você tinha me pedido para te chamar agora, {motivo}. Ainda faz sentido conversarmos sobre o curso de {curso}?",
   frio: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Conversamos há um tempo sobre o curso de {curso}. Surgiram condições novas de matrícula, quer que eu te passe?\n---\nOi, {nome}! Aqui é a {responsavel}, do polo UniFECAF. Lembrei de você: abrimos condições novas para o curso de {curso}. Posso te mandar?",
@@ -453,8 +453,16 @@ function trocaNome(t, n){ const f = firstName(n);
   return t.replace(/\s*,\s*\{nome\}/g, "").replace(/\{nome\}\s*,?\s*/g, ""); }
 function ownerColor(n){ const i = equipe.indexOf(n); if(i>=0) return i%6; let h=0; for(const c of String(n||"")) h=(h*31+c.charCodeAt(0))%6; return h; }
 function telKey(t){ const d = phoneDigits(t).replace(/^55/,""); return d.length>=10 ? d.slice(0,2)+d.slice(-8) : ""; }
-function findDup(t, exceptId){ const k = telKey(t); if(!k) return null; return leads.find(l=>l.id!==exceptId && telKey(l.telefone)===k) || null; }
-const dupTxt = d => `Esse WhatsApp já está cadastrado: ${nomeExib(d)} · vendedora ${d.responsavel||"—"} · ${(STAGES[d.etapa]||{}).label||""}.`;
+// Números excluídos ficam bloqueados para sempre (o número não existe): não voltam por planilha nem por cadastro.
+let bloqueados = new Set();
+function findDup(t, exceptId){ const k = telKey(t); if(!k) return null;
+  const a = leads.find(l=>l.id!==exceptId && telKey(l.telefone)===k); if(a) return a;
+  const x = lixeira.find(l=>!l.juntadoCom && telKey(l.telefone)===k);
+  if(x || bloqueados.has(k)) return {nome: x ? x.nome : "", telefone:t, bloqueado:true};
+  return null; }
+async function bloquearTel(t, sim){ const k = telKey(t); if(!k || !db) return;
+  try{ const ref = db.collection("bloqueados").doc(k); if(sim) await ref.set({em: new Date().toISOString(), por: quemSou()}); else await ref.delete(); }catch(e){} }
+const dupTxt = d => d.bloqueado ? `Esse WhatsApp foi excluído antes${d.nome ? ` (${d.nome})` : ""}: número que não existe.` : `Esse WhatsApp já está cadastrado: ${nomeExib(d)} · vendedora ${d.responsavel||"—"} · ${(STAGES[d.etapa]||{}).label||""}.`;
 const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 const mesKey = () => today().slice(0,7);
 const mesNome = () => { const d = new Date(); return `${MESES[d.getMonth()]} de ${d.getFullYear()}`; };
@@ -556,6 +564,10 @@ function status(l){
     return {cls:"idle", txt: l.ultimoEnvio ? `Enviado em ${br(l.ultimoEnvio)} · aguardando` : "Sem follow-up agendado"};
   }
   const d = diff(l.proximo, today());
+  if(l.etapa==="informado" && l.retornoHora && d>=0){
+    if(d===0) return aguardaHora(l) ? {cls:"future", txt:`Voltar hoje às ${l.retornoHora}`} : {cls:"today", txt:`Voltar agora · combinado ${l.retornoHora}`};
+    return {cls:"future", txt:`${d===1 ? "Amanhã" : br(l.proximo)} às ${l.retornoHora}`};
+  }
   if(d<0) return {cls:"late", txt: d===-1 ? "Atrasado 1 dia" : `Atrasado ${-d} dias`};
   if(d===0) return {cls:"today", txt:"Chamar hoje"};
   return {cls:"future", txt: d===1 ? "Amanhã" : `Em ${d} dias · ${br(l.proximo)}`};
@@ -570,6 +582,8 @@ function stageData(l, st, x){
     const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date;
   } else if(st==="negociando" && x && x.objecao){
     Object.assign(d, {objecao:x.objecao, resumo:x.resumo, resumoEm:t, resumoPor:meuNome()||userEmail, proximo:addDays(t, x.prox!=null ? x.prox : s.dias), cicloInicio:t, ciclos:1, reapresentar:false});
+  } else if(st==="informado"){
+    Object.assign(d, retornoInfo(), {infoEm:t, cicloInicio: l.cicloInicio || t, ciclos: l.ciclos || 1});
   } else if(st==="agendado"){
     Object.assign(d, {pedidoData:x.pedidoData, pedidoMotivo:x.pedidoMotivo || "", proximo:x.pedidoData});
   } else if(s.motivo){
@@ -664,7 +678,7 @@ function cardHTML(l, full){
       <div class="row"><button class="btn primary" type="button" data-act="stage-ok">Confirmar</button><button class="btn ghost" type="button" data-act="stage-no">Cancelar</button></div></div>` : "";
 
   const respondBtn = isPool(l) ? `<button class="btn" type="button" data-act="pegar" style="border-color:var(--accent);color:var(--accent)">Respondeu: é minha</button>` : l.etapa==="matriculado" ? (!l.risco && !isPerm() ? `<button class="btn ghost danger" type="button" data-act="risco">Aluno com problema: avisar Permanência</button>` : "")
-    : l.etapa==="negociando" || l.etapa==="informado" ? (isPerm() ? "" : `<button class="btn" type="button" data-act="ctx" style="border-color:var(--accent);color:var(--accent)">Registrar conversa</button>`)
+    : l.etapa==="negociando" || l.etapa==="informado" ? (isPerm() ? "" : `<button class="btn" type="button" data-act="ctx" style="border-color:var(--accent);color:var(--accent)">Registrar conversa</button>` + (l.etapa==="negociando" ? `<button class="btn" type="button" data-act="infos" style="border-color:var(--accent);color:var(--accent)">Enviei as informações, não respondeu</button>` : ""))
     : (stage.retry || l.etapa==="frio" || l.etapa==="perdido") ? `<button class="btn" type="button" data-act="respondeu" style="border-color:var(--accent);color:var(--accent)">Respondeu</button>` : "";
 
   const dateBox = pendingDate.has(l.id) ? `<div class="stagebox"><b>Reagendar para</b>
@@ -757,6 +771,12 @@ const emptyHTML = (title, body) => `<div class="empty"><strong>${title}</strong>
 
 let fromSnap = false;
 function renderSnap(){ fromSnap = true; try{ render(); } finally { fromSnap = false; } }
+let infoProntos = null;
+setInterval(()=>{ try{
+  const k = leads.filter(l=>l.etapa==="informado" && l.retornoHora && l.proximo===today() && !aguardaHora(l)).map(l=>l.id).join(",");
+  if(infoProntos!==null && k!==infoProntos && tab==="hoje" && !document.querySelector("input:focus,textarea:focus,select:focus")) render();
+  infoProntos = k;
+}catch(e){} }, 60000);
 function render(){
   const a = document.activeElement;
   if(!fromSnap){ const f = document.activeElement; if(f && f!==document.body && f.blur && f.closest && f.closest("#zona,.tabs,#chips")) f.blur(); }
@@ -765,7 +785,7 @@ function render(){
   document.body.classList.toggle("modo-foco", focoAtivo && tab==="hoje");
   renderFicha();
   const t = today(); const L = mine().filter(l=>l.responsavel || (isPool(l) && l.filaDe)); const pool = leads.filter(isPool);
-  const due = L.filter(l=>l.proximo && l.proximo<=t).sort((x,y)=>x.proximo.localeCompare(y.proximo)||String(x.nome).localeCompare(y.nome));
+  const due = L.filter(l=>l.proximo && l.proximo<=t && !aguardaHora(l)).sort((x,y)=>x.proximo.localeCompare(y.proximo)||String(x.nome).localeCompare(y.nome));
   const fut = L.filter(l=>l.proximo && l.proximo>t).sort((x,y)=>x.proximo.localeCompare(y.proximo));
   const alunos = L.filter(l=>l.etapa==="matriculado");
   document.getElementById("sLate").textContent = L.filter(l=>l.proximo && l.proximo<t).length;
@@ -845,6 +865,8 @@ function render(){
     list.innerHTML = (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
                     : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula.")));
+    const tarde = L.filter(aguardaHora).sort((x,y)=>x.retornoHora.localeCompare(y.retornoHora));
+    if(tarde.length) list.innerHTML += `<p class="note" style="margin-top:16px"><b>${tarde.length}</b> para voltar mais tarde hoje (informações enviadas). Entram na fila sozinhos na hora marcada.</p>` + tarde.map(l=>cardHTML(l)).join("");
   } else if(tab==="agenda"){
     const porDia = {}; for(const l of L) if(l.proximo) (porDia[l.proximo] = porDia[l.proximo] || []).push(l);
     const [ay, am] = agMes.split("-").map(Number); const first = new Date(ay, am-1, 1); const nd = new Date(ay, am, 0).getDate();
@@ -1275,7 +1297,7 @@ function renderConfig(force){
     </section>
     <section class="panel">
       <h3 class="sec">Lixeira · ${lx.length}</h3>
-      ${lx.length ? `<p class="tplhelp">Leads excluídos ficam aqui por 30 dias e depois são apagados de vez.</p>` + lx.slice(0,50).map(l=>`<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:6px"><span>${esc(nomeExib(l))} · ${esc(phoneFmt(l.telefone))} · excluído ${l.excluidoEm?brAno(l.excluidoEm):""}${l.excluidoPor?` por ${esc(l.excluidoPor)}`:""}${l.juntadoCom?" (juntado)":""}</span><span class="row"><button class="btn" type="button" data-restaura="${esc(l.id)}">Restaurar</button><button class="btn ghost danger" type="button" data-apaga="${esc(l.id)}">Apagar de vez</button></span></div>`).join("") : `<p class="note">Lixeira vazia.</p>`}
+      ${lx.length ? `<p class="tplhelp">Leads excluídos ficam aqui por 30 dias e depois são apagados de vez. O número continua bloqueado: não volta por planilha nem por cadastro. Restaurar libera o número.</p>` + lx.slice(0,50).map(l=>`<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:6px"><span>${esc(nomeExib(l))} · ${esc(phoneFmt(l.telefone))} · excluído ${l.excluidoEm?brAno(l.excluidoEm):""}${l.excluidoPor?` por ${esc(l.excluidoPor)}`:""}${l.juntadoCom?" (juntado)":""}</span><span class="row"><button class="btn" type="button" data-restaura="${esc(l.id)}">Restaurar</button><button class="btn ghost danger" type="button" data-apaga="${esc(l.id)}">Apagar de vez</button></span></div>`).join("") : `<p class="note">Lixeira vazia.</p>`}
     </section>
     <section class="panel">
       <h3 class="sec">Importar leads</h3>
@@ -1358,7 +1380,7 @@ function parseRows(rows, def){
     if(!nome && !tel) return;
     if(phoneDigits(tel).length<12){ bad.push({linha, nome, motivo:"WhatsApp inválido"}); return; }
     const k = telKey(tel); const d0 = findDup(tel);
-    if(d0){ dup.push({linha, nome, com:`${d0.nome} (${d0.responsavel||"—"})`}); return; }
+    if(d0){ dup.push({linha, nome, com: d0.bloqueado ? "número excluído (não existe)" : `${d0.nome} (${d0.responsavel||"—"})`}); return; }
     if(vistos.has(k)){ dup.push({linha, nome, com:"repetido na planilha"}); return; } vistos.add(k);
     const st = stageFrom(g(r,"situacao")); const prox = dateFrom(g(r,"proximo")); const x = {};
     if(st==="matriculado"){ x.dataMatricula = dateFrom(g(r,"dataMatricula")) || today(); x.primeiroBoleto = dateFrom(g(r,"primeiroBoleto")); x.inicioAulas = dateFrom(g(r,"inicioAulas"));
@@ -1407,7 +1429,7 @@ document.getElementById("config").addEventListener("click", async e=>{
   const fail = () => toast("Não salvou. Verifique seu acesso.");
   const id = e.target.id;
   const rs = e.target.closest("[data-restaura]"), ap = e.target.closest("[data-apaga]"), jn = e.target.closest("[data-juntar]"), mc = e.target.closest("[data-mapc]");
-  if(rs){ try{ await db.collection("leads").doc(rs.dataset.restaura).update({excluido:false, excluidoEm:null}); toast("Lead restaurado"); }catch(err){ fail(); } return; }
+  if(rs){ try{ const lr = lixeira.find(x=>x.id===rs.dataset.restaura); await db.collection("leads").doc(rs.dataset.restaura).update({excluido:false, excluidoEm:null}); if(lr) bloquearTel(lr.telefone, false); toast("Lead restaurado"); }catch(err){ fail(); } return; }
   if(ap){ if(ap.dataset.ok!=="1"){ ap.dataset.ok="1"; ap.textContent = "Confirmar: apagar de vez"; return; }
     try{ await db.collection("leads").doc(ap.dataset.apaga).delete(); toast("Apagado de vez"); }catch(err){ fail(); } return; }
   if(jn){ const g = gruposDuplicados()[Number(jn.dataset.juntar)]; if(!g) return; jn.disabled = true; jn.textContent = "Juntando…";
@@ -1635,6 +1657,16 @@ const donaDe = l => l.responsavel || l.filaDe || "";
 let ultimoPatch = {};
 // Datas automáticas nunca caem no domingo (só se a vendedora escolher a data na mão).
 const semDomingo = d => d && parse(d).getDay()===0 ? addDays(d,1) : d;
+// "Informações enviadas": volta no mesmo dia, 2 h 30 depois. Se passar das 21h, volta no dia seguinte às 9h.
+const INFO_MIN = 150, INFO_FIM = "21:00", INFO_INICIO = "09:00";
+const agoraHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+function retornoInfo(){
+  const d = new Date(Date.now() + INFO_MIN*60000); d.setMinutes(Math.ceil(d.getMinutes()/5)*5, 0, 0);
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if(fmtISO(d)!==today() || hm > INFO_FIM) return {proximo: semDomingo(addDays(today(),1)), retornoHora: INFO_INICIO};
+  return {proximo: today(), retornoHora: hm};
+}
+const aguardaHora = l => l.etapa==="informado" && !!l.retornoHora && l.proximo===today() && agoraHM() < l.retornoHora;
 // Contatos de uma vendedora num dia; "hoje" inclui os atrasados, que também estão na lista de hoje.
 function cargaDia(quem, x, ignorar){ const t = today(); return leads.filter(o=>o.id!==ignorar && donaDe(o)===quem && o.proximo && (x===t ? o.proximo<=t : o.proximo===x)).length; }
 function diaLivre(quem, dia, ignorar){
@@ -1722,6 +1754,10 @@ async function marcarEnviado_(l){
     toast(`Enviado. Se não responder, volta em ${RETRY_DIAS} dias`); return;
   }
   if(l.etapa==="novo"){ await enviarRodizio(l, t); return; }
+  if(l.etapa==="informado"){
+    await patch(l.id, {etapa:"negociando", tentativas:1, proximo:semDomingo(addDays(t,1)), retornoHora:null, ultimoEnvio:t}, `retorno das informações enviado (tentativa 1 de ${MAX_TENT})`, {espalhar:true});
+    toast("Enviado. Se não responder, volta amanhã"); return;
+  }
   if(s.retry){
     const n = (l.tentativas||0)+1;
     const ini = l.cicloInicio || String(l.criadoEm||"").slice(0,10) || t;
@@ -1796,6 +1832,7 @@ list.addEventListener("click", async e=>{
     return;
   }
   if(act==="risco"){ if(await patch(id, {risco:true, riscoAvisado:null, riscoRevisado:true}, "marcado em risco para a Permanência")) toast("Aluno marcado em risco. A Permanência vê no topo da lista dela"); return; }
+  if(act==="infos"){ const r = retornoInfo(); if(await patch(id, {etapa:"informado", ...r, infoEm:today()}, `informações enviadas · voltar ${r.proximo===today() ? "hoje" : "amanhã"} às ${r.retornoHora}`)) toast(`Combinado: volta ${r.proximo===today() ? "hoje" : "amanhã"} às ${r.retornoHora}`); return; }
   if(act==="ctx"){ pendingCtxOnly.add(id); pendingStage.set(id, "negociando"); render(); return; }
   if(act==="nota"){ pendingNota.add(id); render(); setTimeout(()=>{ const t = document.getElementById(`nota-${id}`); if(t) t.focus(); },0); return; }
   if(act==="nota-no"){ pendingNota.delete(id); render(); return; }
@@ -1855,7 +1892,7 @@ list.addEventListener("click", async e=>{
   }
   if(act==="del"){ confirmDel.add(id); render(); }
   if(act==="del-no"){ confirmDel.delete(id); render(); }
-  if(act==="del-ok"){ confirmDel.delete(id); if(fichaId===id) fichaId = null; if(await patch(id, {excluido:true, excluidoEm:today(), excluidoPor:quemSou()}, "excluído (vai para a lixeira)")) toast(podeGerir() ? "Lead na lixeira. Dá para restaurar em Configurações → Lixeira" : "Lead excluído. A Isabella consegue recuperar em até 30 dias"); }
+  if(act==="del-ok"){ confirmDel.delete(id); if(fichaId===id) fichaId = null; const tel0 = l.telefone; if(await patch(id, {excluido:true, excluidoEm:today(), excluidoPor:quemSou()}, "excluído (vai para a lixeira)")){ bloquearTel(tel0, true); toast(podeGerir() ? "Lead excluído. Esse número não volta mais, nem por planilha. Dá para restaurar em Configurações → Lixeira" : "Lead excluído. Esse número não volta mais. A Isabella consegue recuperar em até 30 dias"); } }
 });
 list.addEventListener("change", async e=>{
   const card = e.target.closest(".card"); if(!card) return; const id = card.dataset.id;
@@ -2005,11 +2042,11 @@ function atualizarAdmin(){
 let migrou = false, lixeira = [];
 async function migrarFluxo(){
   if(migrou || !db || !podeGerir() || !(leads.length || lixeira.length)) return; migrou = true;
+  for(const l of lixeira){ const k = telKey(l.telefone); if(k && !l.juntadoCom && !bloqueados.has(k)){ await bloquearTel(l.telefone, true); bloqueados.add(k); } }
   for(const l of lixeira) if(l.excluidoEm && diff(today(), l.excluidoEm) > 30){ try{ await db.collection("leads").doc(l.id).delete(); }catch(e){ break; } }
   const keys = POS.map(p=>p.k); let n = 0;
   for(const l of leads){
     const d = {};
-    if(l.etapa==="informado") d.etapa = "negociando";
     { const h = (l.historico||[]).slice(-1)[0];
       if(l.etapa==="frio" && !l.voltouCadencia && h && /tentativas sem resposta/.test(h.acao) && !/5 meses/.test(h.acao)){
         Object.assign(d, {etapa:"novo", tentativas:MAX_TENT, proximo:maxDate(addDays(h.data, LONGO_DIAS), today()), motivoPerda:null, perdidoEm:null, voltouCadencia:true, cicloInicio: l.cicloInicio || String(l.criadoEm||"").slice(0,10) || today(), ciclos: l.ciclos || 1}); } }
@@ -2069,6 +2106,7 @@ auth.onAuthStateChanged(u=>{
   const onErr = e => { if(e.code==="permission-denied") semAcesso(); else toast("Conexão perdida. Recarregue a página."); };
   unsubs.push(db.collection("leads").onSnapshot(s=>{ const todos = s.docs.map(x=>({id:x.id, ...x.data()})); leads = todos.filter(l=>!l.excluido); lixeira = todos.filter(l=>l.excluido); atualizarAlunosList(); renderSnap(); migrarFluxo(); if(tab==="campanhas") renderCampList(); }, onErr));
   unsubs.push(db.doc("config/mensagens").onSnapshot(s=>{ tpl = {...DEFAULT_TPL, ...(s.exists ? s.data() : {})}; renderSnap(); }, ()=>{}));
+  unsubs.push(db.collection("bloqueados").onSnapshot(s=>{ bloqueados = new Set(s.docs.map(x=>x.id)); }, ()=>{}));
   unsubs.push(db.doc("config/backup").onSnapshot(s=>{ backupInfo = s.exists ? s.data() : {}; renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/cursos").onSnapshot(s=>{ const l = s.exists && s.data().lista; CURSOS = Array.isArray(l) && l.length ? l : CURSOS_PADRAO.slice(); renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/recados").onSnapshot(s=>{ recados = s.exists && Array.isArray(s.data().itens) ? s.data().itens : []; renderSnap(); }, ()=>{}));
