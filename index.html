@@ -871,7 +871,7 @@ function render(){
       return;
     }
     const semBolH = isPerm() ? 0 : L.filter(l=>l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l)).length;
-    list.innerHTML = atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
+    list.innerHTML = nomesForaHTML() + atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
                     : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula.")));
     const tarde = L.filter(aguardaHora).sort((x,y)=>x.retornoHora.localeCompare(y.retornoHora));
@@ -1542,7 +1542,33 @@ renderCampControls();
 const SITE = typeof FIREBASE_CONFIG !== "undefined";
 let membros = [], userEmail = "", saindo = null, renomeando = null;
 let poolVista = "", poolFuturos = false, mostrarOcup = false, distAberto = false, distRodando = false, patchExtra = {};
-let atrasoAberto = false, atrasoRodando = false;
+let atrasoAberto = false, atrasoRodando = false, juntandoNome = false;
+// Troca um nome por outro em todos os campos dos leads (dona, fila, quem fechou, quem está chamando, rodízio e histórico).
+const usaNome = (l, n) => l.responsavel===n || l.filaDe===n || l.vendedoraMatricula===n || l.chamandoPor===n || (l.tentaram||[]).includes(n) || (l.historico||[]).some(h=>h.por===n);
+async function trocarNomeNosLeads(velho, novo){
+  const afetados = [...leads, ...lixeira].filter(l=>usaNome(l, velho));
+  for(const l of afetados){
+    const d = {historico:(l.historico||[]).map(h=>h.por===velho ? {...h, por:novo} : h)};
+    for(const k of ["responsavel","filaDe","vendedoraMatricula","chamandoPor"]) if(l[k]===velho) d[k] = novo;
+    if((l.tentaram||[]).includes(velho)) d.tentaram = [...new Set(l.tentaram.map(n=>n===velho ? novo : n))];
+    try{ await db.collection("leads").doc(l.id).update(d); Object.assign(l, d); }catch(err){ return null; }
+  }
+  return afetados;
+}
+// Nomes que estão nos leads (como dona ou fila) mas não existem mais na equipe: nome antigo de alguém ou de quem saiu.
+function nomesForaHTML(){
+  if(!podeGerir() || resp!=="todas") return "";
+  const ativos = new Set(membrosAtuais().filter(x=>x.ativa!==false).map(x=>x.nome));
+  const g = {}; for(const l of leads){ const d = donaDe(l); if(d && !equipe.includes(d) && !ativos.has(d)) g[d] = (g[d]||0)+1; }
+  const nomes = Object.keys(g); if(!nomes.length) return "";
+  return `<section class="panel" style="margin-bottom:12px;border-color:var(--late)">
+    <b>Leads com nomes que não estão na equipe</b>
+    <p class="note">Esses leads não aparecem na fila de nenhuma vendedora. Se o nome é um <b>nome antigo de alguém da equipe</b> (ex.: antes de renomear), escolha quem é e clique em <b>Juntar</b>: todos os leads, matrículas e histórico passam para o nome atual. Se é de <b>quem saiu</b>, use <b>Redistribuir atrasados</b> abaixo.</p>
+    ${nomes.sort((a,b)=>g[b]-g[a]).map(n=>`<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><span class="pill risk">${esc(n)}: ${g[n]} lead(s)</span>
+      <label class="row" style="font-size:.9rem">é a mesma pessoa que <select data-juntanome="${esc(n)}"><option value="">escolha…</option>${equipe.map(x=>`<option${norm(x).split(" ")[0]===norm(n).split(" ")[0]?" selected":""}>${esc(x)}</option>`).join("")}</select></label>
+      <button class="btn" type="button" data-juntarnome="${esc(n)}">Juntar</button></div>`).join("")}
+  </section>`;
+}
 // Atrasados por dona, para a administradora redistribuir (principalmente os de quem saiu da equipe).
 function atrasadosHTML(L, t){
   if(!podeGerir() || resp!=="todas") return "";
@@ -1654,13 +1680,8 @@ document.getElementById("equipeBox").addEventListener("click", async e=>{
     if(!novo || novo===velho){ renomeando = null; renderEquipe(true); return; }
     if(membrosAtuais().some(x=>x.nome!==velho && norm(x.nome)===norm(novo))){ toast("Já existe alguém com esse nome"); return; }
     e.target.disabled = true; e.target.textContent = "Salvando…";
-    const afetados = leads.filter(l=>l.responsavel===velho || l.vendedoraMatricula===velho || (l.historico||[]).some(h=>h.por===velho));
-    for(const l of afetados){
-      const d = {historico:(l.historico||[]).map(h=>h.por===velho ? {...h, por:novo} : h)};
-      if(l.responsavel===velho) d.responsavel = novo;
-      if(l.vendedoraMatricula===velho) d.vendedoraMatricula = novo;
-      try{ await db.collection("leads").doc(l.id).update(d); }catch(err){ toast("Parou no meio. Tente de novo para terminar."); renderEquipe(true); return; }
-    }
+    const afetados = await trocarNomeNosLeads(velho, novo);
+    if(afetados===null){ toast("Parou no meio. Tente de novo para terminar."); renderEquipe(true); return; }
     const mt = {}; for(const [k,v] of Object.entries(metas)){ mt[k] = {...v}; if(v && v[velho]!==undefined){ mt[k][novo] = v[velho]; delete mt[k][velho]; } }
     try{ await db.doc("config/metas").set(mt); }catch(err){}
     const m = membrosAtuais().map(x=>x.nome===velho ? {...x, nome:novo} : {...x});
@@ -1835,6 +1856,13 @@ list.addEventListener("click", async e=>{
   if(e.target.id==="poolFut"){ poolFuturos = !poolFuturos; render(); return; }
   if(e.target.id==="mostrarOcup"){ mostrarOcup = !mostrarOcup; render(); return; }
   if(e.target.id==="btnDist"){ distAberto = !distAberto; render(); return; }
+  const jn0 = e.target.closest("[data-juntarnome]");
+  if(jn0 && !juntandoNome){ const velho = jn0.dataset.juntarnome; const sel = [...document.querySelectorAll("[data-juntanome]")].find(x=>x.dataset.juntanome===velho);
+    const novo = sel && sel.value; if(!novo){ toast("Escolha quem é essa pessoa na equipe"); return; }
+    if(jn0.dataset.ok!=="1"){ jn0.dataset.ok = "1"; jn0.textContent = `Confirmar: ${velho} → ${novo}`; return; }
+    juntandoNome = true; jn0.disabled = true; jn0.textContent = "Juntando…";
+    const r = await trocarNomeNosLeads(velho, novo); juntandoNome = false;
+    toast(r===null ? "Parou no meio. Clique de novo para terminar." : `${r.length} lead(s) de "${velho}" agora estão com ${novo}`); render(); return; }
   if(e.target.id==="atrasoAbrir"){ atrasoAberto = !atrasoAberto; render(); return; }
   if(e.target.id==="atrasoOk" && !atrasoRodando){
     const nomes = [...document.querySelectorAll("[data-atrnome]")].filter(c=>c.checked).map(c=>c.dataset.atrnome);
