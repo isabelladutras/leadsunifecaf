@@ -473,6 +473,15 @@ const pct = (a,b) => b ? Math.round(a*100/b)+"%" : "–";
 function toast(msg){ const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(()=>t.hidden=true, 2800); }
 const mine = () => leads.filter(l => resp==="todas" || l.responsavel===resp || (!l.responsavel && l.filaDe===resp));
 const matDate = l => String(l.dataMatricula || l.matriculadoEm || "").slice(0,10);
+// Quem fechou a matrícula. Não muda quando o aluno passa para outra vendedora (ex.: saída de alguém da equipe).
+const credito = l => l.vendedoraMatricula || l.responsavel || "";
+// Para alunos antigos: descobre pelo histórico quem fechou, desfazendo passagens feitas depois da matrícula.
+function creditoHistorico(l){
+  const hs = l.historico || []; const iMat = hs.findIndex(h=>/matriculado em \d/.test(h.acao||"")); const md = matDate(l);
+  for(let i=0; i<hs.length; i++){ const m = /passado para .+ \(saída de (.+)\)$/.exec(hs[i].acao||""); if(!m) continue;
+    if(iMat>=0 ? i>iMat : (md && hs[i].data>=md)) return m[1]; }
+  return l.responsavel || "";
+}
 function alunoId(nome){ const n = norm(nome); if(!n) return null; const a = leads.find(l=>l.etapa==="matriculado" && norm(l.nome)===n); return a ? a.id : null; }
 function atualizarAlunosList(){ const dl = document.getElementById("alunosList"); if(!dl) return;
   const nomes = [...new Set(leads.filter(l=>l.etapa==="matriculado").map(l=>l.nome))].sort();
@@ -577,7 +586,7 @@ function status(l){
 function stageData(l, st, x){
   const s = STAGES[st], t = today(), d = {etapa:st, tentativas:0};
   if(st==="matriculado"){
-    Object.assign(d, {dataMatricula:x.dataMatricula, diaVencimento:x.diaVencimento, primeiroBoleto:x.primeiroBoleto || null, inicioAulas:x.inicioAulas || null, matriculadoEm:x.dataMatricula || l.matriculadoEm || t,
+    Object.assign(d, {vendedoraMatricula: l.responsavel || meuNome() || null, dataMatricula:x.dataMatricula, diaVencimento:x.diaVencimento, primeiroBoleto:x.primeiroBoleto || null, inicioAulas:x.inicioAulas || null, matriculadoEm:x.dataMatricula || l.matriculadoEm || t,
       posFeitos:[], posSemResposta:0, risco:false, riscoAvisado:null});
     const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date;
   } else if(st==="negociando" && x && x.objecao){
@@ -794,7 +803,7 @@ function render(){
   document.getElementById("sRisk").textContent = alunos.filter(l=>l.risco).length;
   { const mm = metas[mesKey()] || {}; const quem = resp==="todas" ? equipe : [resp];
     const meta = quem.reduce((a,n)=>a+(Number(mm[n]) || META_PADRAO), 0);
-    const feitas = leads.filter(l=>quem.includes(l.responsavel) && matDate(l).slice(0,7)===mesKey()).length;
+    const feitas = leads.filter(l=>l.etapa==="matriculado" && (resp==="todas" || credito(l)===resp) && matDate(l).slice(0,7)===mesKey()).length;
     const falta = Math.max(0, meta-feitas), du = diasUteisRestantes();
     document.getElementById("metaStrip").innerHTML = `<div class="l1"><span><b>${resp==="todas"?"Equipe":esc(resp)} · ${mesNome()}:</b> ${feitas} de ${meta} matrículas (${pct(feitas,meta)})</span>
       <span>${falta===0 ? "Meta batida" : `Faltam ${falta} · ${du ? num1(falta/du)+" por dia útil" : "mês encerrado"}`}</span></div>
@@ -862,7 +871,7 @@ function render(){
       return;
     }
     const semBolH = isPerm() ? 0 : L.filter(l=>l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l)).length;
-    list.innerHTML = (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
+    list.innerHTML = atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
                     : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula.")));
     const tarde = L.filter(aguardaHora).sort((x,y)=>x.retornoHora.localeCompare(y.retornoHora));
@@ -923,16 +932,16 @@ function renderInicio(){
   const rows = equipe.map(n=>{
     let atend = 0, pegos = 0;
     for(const l of leads) for(const h of (l.historico||[])) if(h.por===n && inP(h.data)){ if(ATEND.test(h.acao)) atend++; if(/ficou com/.test(h.acao)) pegos++; }
-    const mine_ = leads.filter(l=>l.responsavel===n);
+    const mine_ = leads.filter(l=>l.responsavel===n), fechou = leads.filter(l=>l.etapa==="matriculado" && credito(l)===n);
     return {n, atend, pegos,
-      mats: mine_.filter(l=>inP(matDate(l))).length,
-      matsMes: mine_.filter(l=>matDate(l).slice(0,7)===mesKey()).length,
+      mats: fechou.filter(l=>inP(matDate(l))).length,
+      matsMes: fechou.filter(l=>matDate(l).slice(0,7)===mesKey()).length,
       meta: Number(mm[n]) || META_PADRAO,
       carteira: mine_.filter(l=>!["perdido","naoquer","matriculado"].includes(l.etapa)).length,
       atras: mine_.filter(l=>l.proximo && l.proximo<t).length};
   }).sort((a,b)=>b.mats-a.mats || b.atend-a.atend || a.n.localeCompare(b.n));
   const totM = rows.reduce((a,r)=>a+r.mats,0), totA = rows.reduce((a,r)=>a+r.atend,0);
-  const metaEq = rows.reduce((a,r)=>a+r.meta,0), matsEq = rows.reduce((a,r)=>a+r.matsMes,0);
+  const metaEq = rows.reduce((a,r)=>a+r.meta,0), matsEq = leads.filter(l=>l.etapa==="matriculado" && matDate(l).slice(0,7)===mesKey()).length;
   const top = rows.slice(0,3);
   const precisaBackup = podeGerir() && backupInfo && backupInfo.ultimoMes !== mesKey() && leads.length;
   const naoLidos = recadosNaoLidos();
@@ -1116,10 +1125,10 @@ function renderNumeros(){
   const [ini,fim] = periodRange(); const inP = s => s && String(s).slice(0,10)>=ini && String(s).slice(0,10)<=fim;
   const t = today();
   const novos = leads.filter(l=>inP(l.criadoEm));
-  const nomes = [...equipe, ...new Set(leads.map(l=>l.responsavel).filter(n=>n && !equipe.includes(n)))];
-  const linha = (lista, todosLeads) => {
+  const nomes = [...equipe, ...new Set([...leads.map(l=>l.responsavel), ...leads.filter(l=>l.etapa==="matriculado").map(credito)].filter(n=>n && !equipe.includes(n)))];
+  const linha = (lista, todosLeads, baseMats) => {
     const n = lista.filter(l=>inP(l.criadoEm)); const conv = n.filter(l=>l.etapa==="matriculado").length;
-    const mats = todosLeads.filter(l=>inP(matDate(l)));
+    const mats = (baseMats || todosLeads).filter(l=>l.etapa==="matriculado" && inP(matDate(l)));
     const tempos = mats.filter(l=>l.criadoEm).map(l=>diff(matDate(l), l.criadoEm)).filter(d=>d>=0);
     const media = tempos.length ? Math.round(tempos.reduce((a,b)=>a+b,0)/tempos.length) : null;
     return {leads:n.length, mats:mats.length, conv:pct(conv,n.length), media: media===null?"–":`${media} d`,
@@ -1132,11 +1141,11 @@ function renderNumeros(){
     (primeiro[h.por||"—"] = primeiro[h.por||"—"] || []).push(horas); todosTempos.push(horas); }
   const fmtH = arr => { if(!arr || !arr.length) return "–"; const m = arr.reduce((a,b)=>a+b,0)/arr.length;
     return m < 1 ? `${Math.max(1,Math.round(m*60))} min` : m < 48 ? `${num1(m)} h` : `${num1(m/24)} dias`; };
-  const rows = nomes.map(n=>{ const ls = leads.filter(l=>l.responsavel===n); return {n, ...linha(ls, ls), prim: fmtH(primeiro[n])}; });
+  const rows = nomes.map(n=>{ const ls = leads.filter(l=>l.responsavel===n); return {n, ...linha(ls, ls, leads.filter(l=>l.etapa==="matriculado" && credito(l)===n)), prim: fmtH(primeiro[n])}; });
   const tot = linha(leads, leads);
   const td = r => `<td>${r.leads}</td><td>${r.mats}</td><td>${r.conv}</td><td>${r.media}</td><td>${r.prim||"–"}</td><td>${r.atras}</td><td>${r.risco}</td>`;
   const mm = metas[mesKey()] || {}; const du = diasUteisRestantes();
-  const metaRows = equipe.map(n=>{ const meta = Number(mm[n]) || META_PADRAO; const feitas = leads.filter(l=>l.responsavel===n && matDate(l).slice(0,7)===mesKey()).length;
+  const metaRows = equipe.map(n=>{ const meta = Number(mm[n]) || META_PADRAO; const feitas = leads.filter(l=>l.etapa==="matriculado" && credito(l)===n && matDate(l).slice(0,7)===mesKey()).length;
     const falta = Math.max(0, meta-feitas); return {n, meta, feitas, falta, ritmo: !meta ? "–" : falta===0 ? "Meta batida" : du ? `${num1(falta/du)} por dia` : "Mês encerrado"}; });
   const metaTot = metaRows.reduce((a,r)=>({meta:a.meta+r.meta, feitas:a.feitas+r.feitas}), {meta:0, feitas:0});
 
@@ -1148,8 +1157,8 @@ function renderNumeros(){
 
   const anos = [...new Set([new Date().getFullYear(), ...leads.map(l=>Number(matDate(l).slice(0,4))).filter(Boolean)])].sort((a,b)=>b-a);
   if(!anos.includes(anoSel)) anoSel = anos[0];
-  const nomesAno = [...new Set([...membrosAtuais().map(m=>m.nome), ...leads.filter(l=>matDate(l).startsWith(anoSel+"-")).map(l=>l.responsavel||"Sem vendedora")])];
-  const cont = (n,m) => leads.filter(l=>(l.responsavel||"Sem vendedora")===n && matDate(l).slice(0,7)===`${anoSel}-${pad(m)}`).length;
+  const nomesAno = [...new Set([...membrosAtuais().map(m=>m.nome), ...leads.filter(l=>l.etapa==="matriculado" && matDate(l).startsWith(anoSel+"-")).map(l=>credito(l)||"Sem vendedora")])];
+  const cont = (n,m) => leads.filter(l=>l.etapa==="matriculado" && (credito(l)||"Sem vendedora")===n && matDate(l).slice(0,7)===`${anoSel}-${pad(m)}`).length;
   const anoRows = nomesAno.map(n=>({n, meses:[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>cont(n,m))})).map(r=>({...r, tot:r.meses.reduce((a,b)=>a+b,0)})).filter(r=>r.tot || membrosAtuais().some(m=>m.nome===r.n && m.ativa!==false)).sort((a,b)=>b.tot-a.tot);
   const mesAtual = anoSel===new Date().getFullYear() ? new Date().getMonth() : -1;
   const MES3 = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -1229,7 +1238,7 @@ function renderNumeros(){
       <h3 class="sec">Indicações</h3>
       ${(()=>{ const ind = leads.filter(l=>l.indicadoPor); if(!ind.length) return `<p class="note">Nenhuma indicação registrada ainda. Preencha "Indicado por" ao cadastrar o lead.</p>`;
         const g = {}; for(const l of ind){ const k = norm(l.indicadoPor); (g[k] = g[k] || {nome:l.indicadoPor, n:0, m:0, vend:""}); g[k].n++; if(l.etapa==="matriculado") g[k].m++; }
-        for(const x of Object.values(g)){ const a = leads.find(l=>l.etapa==="matriculado" && norm(l.nome)===norm(x.nome)); x.vend = a ? (a.responsavel||"") : ""; }
+        for(const x of Object.values(g)){ const a = leads.find(l=>l.etapa==="matriculado" && norm(l.nome)===norm(x.nome)); x.vend = a ? credito(a) : ""; }
         const rows = Object.values(g).sort((a,b)=>b.m-a.m || b.n-a.n).slice(0,20);
         const mats = ind.filter(l=>l.etapa==="matriculado").length, totM = leads.filter(l=>l.etapa==="matriculado").length;
         return `<p class="note">${ind.length} lead(s) vieram de indicação · ${mats} viraram matrícula (${pct(mats,totM)} de todas as matrículas).</p>
@@ -1533,12 +1542,33 @@ renderCampControls();
 const SITE = typeof FIREBASE_CONFIG !== "undefined";
 let membros = [], userEmail = "", saindo = null, renomeando = null;
 let poolVista = "", poolFuturos = false, mostrarOcup = false, distAberto = false, distRodando = false, patchExtra = {};
+let atrasoAberto = false, atrasoRodando = false;
+// Atrasados por dona, para a administradora redistribuir (principalmente os de quem saiu da equipe).
+function atrasadosHTML(L, t){
+  if(!podeGerir() || resp!=="todas") return "";
+  const late = L.filter(l=>l.proximo && l.proximo<t); if(!late.length) return "";
+  const g = {}; for(const l of late){ const d = donaDe(l) || "Sem vendedora"; g[d] = (g[d]||0)+1; }
+  const fora = Object.keys(g).filter(n=>n!=="Sem vendedora" && !equipe.includes(n));
+  const nFora = fora.reduce((a,n)=>a+g[n],0);
+  const chips = Object.entries(g).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<span class="pill ${equipe.includes(n)?"owner":"risk"}"${equipe.includes(n)?` style="--c:var(--p${ownerColor(n)})"`:""}>${esc(n)}: ${q}${equipe.includes(n)?"":" · fora da equipe"}</span>`).join("");
+  return `<section class="panel" style="margin-bottom:12px">
+    <div class="row" style="justify-content:space-between"><b>${late.length} atrasado(s) por vendedora</b><button class="btn" type="button" id="atrasoAbrir">${atrasoAberto?"Fechar":"Redistribuir atrasados"}</button></div>
+    <div class="chips" style="margin-top:6px">${chips}</div>
+    ${nFora ? `<p class="note" style="color:var(--late)"><b>${nFora} estão com quem não está mais na equipe</b> e não aparecem na fila de nenhuma vendedora (só você vê, em Todas). Redistribua para não perder esses leads.</p>` : `<p class="note">Os atrasados estão na fila de cada vendedora, no topo de Chamar hoje.</p>`}
+    ${atrasoAberto ? `<div class="stagebox"><b>Redistribuir atrasados</b>
+      <p class="tplhelp">Os leads vão para as vendedoras marcadas, para a menos carregada primeiro, respeitando o limite de ${LIMITE_DIA} por dia (o que passar vai para o próximo dia útil). Matrículas continuam contando para quem fechou.</p>
+      <div class="chips">${equipe.map(n=>`<label class="pill" style="cursor:pointer"><input type="checkbox" data-atrnome="${esc(n)}" checked> ${esc(n)}</label>`).join("")}</div>
+      <label class="row" style="font-size:.9rem"><input type="radio" name="atrQuais" value="fora"${nFora?" checked":" disabled"}> Só os de quem saiu da equipe (${nFora})</label>
+      <label class="row" style="font-size:.9rem"><input type="radio" name="atrQuais" value="todos"${nFora?"":" checked"}> Todos os atrasados (${late.length}), inclusive os das vendedoras ativas</label>
+      <div class="row"><button class="btn primary" type="button" id="atrasoOk">Redistribuir</button></div></div>` : ""}
+  </section>`;
+}
 const pendingNota = new Set();
 const podeGerir = () => !SITE || (typeof ADMIN_EMAILS !== "undefined" && ADMIN_EMAILS.map(e=>String(e).toLowerCase()).includes(userEmail));
 const meuPapel = () => { const m = membros.find(x=>x.ativa!==false && String(x.email||"").toLowerCase()===userEmail); return m ? (m.papel||"vendedora") : ""; };
 const isPerm = () => SITE && !podeGerir() && meuPapel()==="permanencia";
 const membrosAtuais = () => membros.length ? membros : equipe.map(n=>({nome:n, email:"", ativa:true}));
-const emAberto = n => leads.filter(l=>l.responsavel===n && !["perdido","naoquer"].includes(l.etapa));
+const emAberto = n => leads.filter(l=>(l.responsavel===n || (!l.responsavel && l.filaDe===n)) && !["perdido","naoquer"].includes(l.etapa));
 function aplicarEquipe(data){
   const m = Array.isArray(data && data.membros) ? data.membros : Array.isArray(data && data.nomes) ? data.nomes.map(n=>({nome:n, email:"", ativa:true})) : null;
   if(!m || !m.length) return;
@@ -1558,7 +1588,7 @@ async function salvarEquipe(m, msg){
 function boxSaida(){
   const outros = equipe.filter(x=>x!==saindo); const q = emAberto(saindo).length;
   return `<div class="stagebox"><b>Desativar ${esc(saindo)}</b>
-    <p class="tplhelp">${q ? `${q} lead(s) e aluno(s) em aberto estão com ela. Eles passam para:` : "Ela não tem leads em aberto."}</p>
+    <p class="tplhelp">${q ? `${q} lead(s) e aluno(s) em aberto estão com ela. Eles passam para a vendedora abaixo. As matrículas que ela fechou continuam contando para ela, não para quem recebe.` : "Ela não tem leads em aberto."}</p>
     ${q ? (outros.length ? `<div class="grid2"><label class="f">Nova responsável<select id="sairPara">${outros.map(o=>`<option>${esc(o)}</option>`).join("")}</select></label></div>` : `<p class="err">Adicione outra vendedora antes, para receber esses leads.</p>`) : ""}
     ${SITE ? `<p class="tplhelp">Ao desativar, ela perde o acesso aos leads na hora, mesmo que ainda tenha senha.</p>` : ""}
     <div class="row"><button class="btn danger" type="button" id="sairOk"${q && !outros.length ? " disabled" : ""}>Desativar</button><button class="btn ghost" type="button" id="sairNo">Cancelar</button></div></div>`;
@@ -1568,7 +1598,7 @@ function renderEquipe(force){
   if(!force && el.contains(document.activeElement) && document.activeElement.tagName!=="BUTTON") return;
   const m = membrosAtuais(); const ativos = m.filter(x=>x.ativa!==false), inativos = m.filter(x=>x.ativa===false);
   const mm = metas[mesKey()] || {}; const gerir = podeGerir();
-  const mats = n => leads.filter(l=>l.responsavel===n && matDate(l).slice(0,7)===mesKey()).length;
+  const mats = n => leads.filter(l=>l.etapa==="matriculado" && credito(l)===n && matDate(l).slice(0,7)===mesKey()).length;
   el.innerHTML = `
     ${gerir ? `<form class="panel" id="formVend">
       <h3 class="sec">Adicionar vendedora</h3>
@@ -1624,10 +1654,11 @@ document.getElementById("equipeBox").addEventListener("click", async e=>{
     if(!novo || novo===velho){ renomeando = null; renderEquipe(true); return; }
     if(membrosAtuais().some(x=>x.nome!==velho && norm(x.nome)===norm(novo))){ toast("Já existe alguém com esse nome"); return; }
     e.target.disabled = true; e.target.textContent = "Salvando…";
-    const afetados = leads.filter(l=>l.responsavel===velho || (l.historico||[]).some(h=>h.por===velho));
+    const afetados = leads.filter(l=>l.responsavel===velho || l.vendedoraMatricula===velho || (l.historico||[]).some(h=>h.por===velho));
     for(const l of afetados){
       const d = {historico:(l.historico||[]).map(h=>h.por===velho ? {...h, por:novo} : h)};
       if(l.responsavel===velho) d.responsavel = novo;
+      if(l.vendedoraMatricula===velho) d.vendedoraMatricula = novo;
       try{ await db.collection("leads").doc(l.id).update(d); }catch(err){ toast("Parou no meio. Tente de novo para terminar."); renderEquipe(true); return; }
     }
     const mt = {}; for(const [k,v] of Object.entries(metas)){ mt[k] = {...v}; if(v && v[velho]!==undefined){ mt[k][novo] = v[velho]; delete mt[k][velho]; } }
@@ -1642,7 +1673,8 @@ document.getElementById("equipeBox").addEventListener("click", async e=>{
   if(e.target.id==="sairOk" && saindo){
     const nome = saindo; const para = document.getElementById("sairPara") ? document.getElementById("sairPara").value : null;
     e.target.disabled = true; e.target.textContent = "Desativando…";
-    if(para){ for(const l of emAberto(nome)){ if(!(await patch(l.id, {responsavel:para}, `passado para ${para} (saída de ${nome})`))){ renderEquipe(true); return; } } }
+    if(para){ for(const l of emAberto(nome)){ const dd = l.responsavel ? {responsavel:para} : {filaDe:para}; if(l.etapa==="matriculado") dd.vendedoraMatricula = credito(l);
+      if(!(await patch(l.id, dd, `passado para ${para} (saída de ${nome})`))){ renderEquipe(true); return; } } }
     const m = membrosAtuais().map(x=>x.nome===nome ? {...x, ativa:false, saiuEm:today()} : {...x});
     saindo = null;
     if(await salvarEquipe(m, para ? `${nome} desativada. Leads passados para ${para}` : `${nome} desativada`)) renderEquipe(true);
@@ -1803,6 +1835,25 @@ list.addEventListener("click", async e=>{
   if(e.target.id==="poolFut"){ poolFuturos = !poolFuturos; render(); return; }
   if(e.target.id==="mostrarOcup"){ mostrarOcup = !mostrarOcup; render(); return; }
   if(e.target.id==="btnDist"){ distAberto = !distAberto; render(); return; }
+  if(e.target.id==="atrasoAbrir"){ atrasoAberto = !atrasoAberto; render(); return; }
+  if(e.target.id==="atrasoOk" && !atrasoRodando){
+    const nomes = [...document.querySelectorAll("[data-atrnome]")].filter(c=>c.checked).map(c=>c.dataset.atrnome);
+    if(!nomes.length){ toast("Escolha pelo menos uma vendedora"); return; }
+    const quais = (document.querySelector('input[name="atrQuais"]:checked')||{}).value || "todos"; const t = today();
+    const alvo = leads.filter(l=>l.proximo && l.proximo<t && (quais==="todos" || !equipe.includes(donaDe(l)))).sort((a,b)=>a.proximo.localeCompare(b.proximo));
+    if(!alvo.length){ toast("Nenhum atrasado para redistribuir"); return; }
+    atrasoRodando = true; e.target.disabled = true; let n = 0;
+    for(const l of alvo){
+      const atual = donaDe(l); const cand = nomes.filter(x=>x!==atual); const op = cand.length ? cand : nomes;
+      const para = op.slice().sort((a,b)=>cargaDia(a,t,l.id)-cargaDia(b,t,l.id) || leads.filter(x=>donaDe(x)===a).length-leads.filter(x=>donaDe(x)===b).length)[0];
+      const d = {proximo:t}; if(l.responsavel) d.responsavel = para; else d.filaDe = para;
+      if(l.etapa==="matriculado") d.vendedoraMatricula = credito(l);
+      if(!(await patch(l.id, d, `atrasado: passado de ${atual||"sem vendedora"} para ${para}`, {espalhar:true}))) break;
+      if(l.responsavel) l.responsavel = para; else l.filaDe = para; if(ultimoPatch.proximo) l.proximo = ultimoPatch.proximo;
+      n++; e.target.textContent = `Redistribuindo… ${n} de ${alvo.length}`;
+    }
+    atrasoRodando = false; atrasoAberto = false; toast(`${n} atrasado(s) redistribuído(s) entre ${nomes.length} vendedora(s)`); render(); return;
+  }
   if(e.target.id==="distNo"){ distAberto = false; render(); return; }
   if(e.target.id==="distOk" && !distRodando){
     const nomes = [...document.querySelectorAll("[data-distnome]")].filter(c=>c.checked).map(c=>c.dataset.distnome);
@@ -2051,6 +2102,7 @@ async function migrarFluxo(){
       if(l.etapa==="frio" && !l.voltouCadencia && h && /tentativas sem resposta/.test(h.acao) && !/5 meses/.test(h.acao)){
         Object.assign(d, {etapa:"novo", tentativas:MAX_TENT, proximo:maxDate(addDays(h.data, LONGO_DIAS), today()), motivoPerda:null, perdidoEm:null, voltouCadencia:true, cicloInicio: l.cicloInicio || String(l.criadoEm||"").slice(0,10) || today(), ciclos: l.ciclos || 1}); } }
     if(l.etapa==="perdido") d.etapa = "frio";
+    if(l.etapa==="matriculado" && !l.vendedoraMatricula){ const c = creditoHistorico(l); if(c) d.vendedoraMatricula = c; }
     if(!Object.keys(d).length && l.etapa==="novo" && (l.tentativas||0) >= MAX_TENT){
       const p = dadosPassagem(l, today(), maxDate(l.proximo || today(), today()));
       Object.assign(d, p.d); if(d.proximo){ const quem = d.responsavel || d.filaDe || ""; d.proximo = diaLivre(quem, d.proximo, l.id); }
