@@ -476,11 +476,12 @@ const matDate = l => String(l.dataMatricula || l.matriculadoEm || "").slice(0,10
 // Quem fechou a matrícula. Não muda quando o aluno passa para outra vendedora (ex.: saída de alguém da equipe).
 const credito = l => l.vendedoraMatricula || l.responsavel || "";
 // Para alunos antigos: descobre pelo histórico quem fechou, desfazendo passagens feitas depois da matrícula.
-function creditoHistorico(l){
+function creditoHistorico(l){ return creditoSaida(l) || l.responsavel || ""; }
+function creditoSaida(l){
   const hs = l.historico || []; const iMat = hs.findIndex(h=>/matriculado em \d/.test(h.acao||"")); const md = matDate(l);
   for(let i=0; i<hs.length; i++){ const m = /passado para .+ \(saída de (.+)\)$/.exec(hs[i].acao||""); if(!m) continue;
     if(iMat>=0 ? i>iMat : (md && hs[i].data>=md)) return m[1]; }
-  return l.responsavel || "";
+  return "";
 }
 function alunoId(nome){ const n = norm(nome); if(!n) return null; const a = leads.find(l=>l.etapa==="matriculado" && norm(l.nome)===n); return a ? a.id : null; }
 function atualizarAlunosList(){ const dl = document.getElementById("alunosList"); if(!dl) return;
@@ -1548,7 +1549,7 @@ const usaNome = (l, n) => l.responsavel===n || l.filaDe===n || l.vendedoraMatric
 async function trocarNomeNosLeads(velho, novo){
   const afetados = [...leads, ...lixeira].filter(l=>usaNome(l, velho));
   for(const l of afetados){
-    const d = {historico:(l.historico||[]).map(h=>h.por===velho ? {...h, por:novo} : h)};
+    const d = {historico:[...(l.historico||[]).map(h=>h.por===velho ? {...h, por:novo} : h), {data:today(), em:new Date().toISOString(), acao:`nome "${velho}" passou a ser "${novo}"`, por:quemSou()}].slice(-20)};
     for(const k of ["responsavel","filaDe","vendedoraMatricula","chamandoPor"]) if(l[k]===velho) d[k] = novo;
     if((l.tentaram||[]).includes(velho)) d.tentaram = [...new Set(l.tentaram.map(n=>n===velho ? novo : n))];
     try{ await db.collection("leads").doc(l.id).update(d); Object.assign(l, d); }catch(err){ return null; }
@@ -1559,11 +1560,12 @@ async function trocarNomeNosLeads(velho, novo){
 function nomesForaHTML(){
   if(!podeGerir() || resp!=="todas") return "";
   const ativos = new Set(membrosAtuais().filter(x=>x.ativa!==false).map(x=>x.nome));
-  const g = {}; for(const l of leads){ const d = donaDe(l); if(d && !equipe.includes(d) && !ativos.has(d)) g[d] = (g[d]||0)+1; }
+  const sairam = new Set(membrosAtuais().filter(x=>x.ativa===false).map(x=>x.nome));
+  const g = {}; for(const l of leads){ const d = donaDe(l); if(d && !equipe.includes(d) && !ativos.has(d) && !sairam.has(d)) g[d] = (g[d]||0)+1; }
   const nomes = Object.keys(g); if(!nomes.length) return "";
   return `<section class="panel" style="margin-bottom:12px;border-color:var(--late)">
     <b>Leads com nomes que não estão na equipe</b>
-    <p class="note">Esses leads não aparecem na fila de nenhuma vendedora. Se o nome é um <b>nome antigo de alguém da equipe</b> (ex.: antes de renomear), escolha quem é e clique em <b>Juntar</b>: todos os leads, matrículas e histórico passam para o nome atual. Se é de <b>quem saiu</b>, use <b>Redistribuir atrasados</b> abaixo.</p>
+    <p class="note">Esses leads não aparecem na fila de nenhuma vendedora. Use <b>Juntar</b> só quando o nome é um <b>nome antigo da mesma pessoa</b> (ex.: antes de renomear): leads, matrículas e histórico passam para o nome atual. Para leads de <b>quem saiu</b>, use <b>Redistribuir atrasados</b>, que mantém as matrículas com quem fechou.</p>
     ${nomes.sort((a,b)=>g[b]-g[a]).map(n=>`<div class="row" style="gap:8px;flex-wrap:wrap;margin-top:6px"><span class="pill risk">${esc(n)}: ${g[n]} lead(s)</span>
       <label class="row" style="font-size:.9rem">é a mesma pessoa que <select data-juntanome="${esc(n)}"><option value="">escolha…</option>${equipe.map(x=>`<option${norm(x).split(" ")[0]===norm(n).split(" ")[0]?" selected":""}>${esc(x)}</option>`).join("")}</select></label>
       <button class="btn" type="button" data-juntarnome="${esc(n)}">Juntar</button></div>`).join("")}
@@ -2131,6 +2133,7 @@ async function migrarFluxo(){
         Object.assign(d, {etapa:"novo", tentativas:MAX_TENT, proximo:maxDate(addDays(h.data, LONGO_DIAS), today()), motivoPerda:null, perdidoEm:null, voltouCadencia:true, cicloInicio: l.cicloInicio || String(l.criadoEm||"").slice(0,10) || today(), ciclos: l.ciclos || 1}); } }
     if(l.etapa==="perdido") d.etapa = "frio";
     if(l.etapa==="matriculado" && !l.vendedoraMatricula){ const c = creditoHistorico(l); if(c) d.vendedoraMatricula = c; }
+    else if(l.etapa==="matriculado" && !l.creditoRevisado){ const c = creditoSaida(l); if(c && c!==l.vendedoraMatricula) d.vendedoraMatricula = c; d.creditoRevisado = true; }
     if(!Object.keys(d).length && l.etapa==="novo" && (l.tentativas||0) >= MAX_TENT){
       const p = dadosPassagem(l, today(), maxDate(l.proximo || today(), today()));
       Object.assign(d, p.d); if(d.proximo){ const quem = d.responsavel || d.filaDe || ""; d.proximo = diaLivre(quem, d.proximo, l.id); }
