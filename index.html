@@ -872,7 +872,7 @@ function render(){
       return;
     }
     const semBolH = isPerm() ? 0 : L.filter(l=>l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l)).length;
-    list.innerHTML = nomesForaHTML() + atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
+    list.innerHTML = faltaHTML(L, t) + nomesForaHTML() + atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
                     : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula.")));
     const tarde = L.filter(aguardaHora).sort((x,y)=>x.retornoHora.localeCompare(y.retornoHora));
@@ -1543,7 +1543,22 @@ renderCampControls();
 const SITE = typeof FIREBASE_CONFIG !== "undefined";
 let membros = [], userEmail = "", saindo = null, renomeando = null;
 let poolVista = "", poolFuturos = false, mostrarOcup = false, distAberto = false, distRodando = false, patchExtra = {};
-let atrasoAberto = false, atrasoRodando = false, juntandoNome = false;
+let atrasoAberto = false, atrasoRodando = false, juntandoNome = false, faltaAberta = false, faltaQuem = "";
+// Cobrir falta: a administradora passa os contatos de hoje (e atrasados) de quem faltou para outras vendedoras.
+function faltaHTML(L, t){
+  if(!podeGerir() || resp!=="todas") return "";
+  const conta = n => L.filter(l=>donaDe(l)===n && l.proximo && l.proximo<=t).length;
+  if(!faltaAberta) return `<div class="row" style="justify-content:flex-end;margin-bottom:8px"><button class="btn" type="button" id="faltaAbrir">Alguém faltou hoje?</button></div>`;
+  if(!faltaQuem || !equipe.includes(faltaQuem)) faltaQuem = equipe[0] || "";
+  const q = conta(faltaQuem);
+  return `<section class="panel" style="margin-bottom:12px"><b>Cobrir falta de hoje</b>
+    <p class="tplhelp">Passa todos os contatos de hoje (e os atrasados) de quem faltou para as vendedoras marcadas, para a menos carregada primeiro, respeitando o limite de ${LIMITE_DIA} por dia. Os leads ficam com quem recebeu; matrícula conta para quem fechar. Alunos já matriculados continuam contando para quem fechou.</p>
+    <div class="grid2"><label class="f">Quem faltou<select id="faltaQuem">${equipe.map(n=>`<option${n===faltaQuem?" selected":""}>${esc(n)}</option>`).join("")}</select></label></div>
+    <p class="note"><b>${q}</b> contato(s) de ${esc(faltaQuem)} para hoje.</p>
+    <div class="chips">${equipe.filter(n=>n!==faltaQuem).map(n=>`<label class="pill" style="cursor:pointer"><input type="checkbox" data-cobre="${esc(n)}" checked> ${esc(n)} · ${conta(n)} hoje</label>`).join("")}</div>
+    <div class="row" style="margin-top:8px"><button class="btn primary" type="button" id="faltaOk"${q?"":" disabled"}>Passar ${q} contato(s)</button><button class="btn ghost" type="button" id="faltaNo">Cancelar</button></div>
+  </section>`;
+}
 // Troca um nome por outro em todos os campos dos leads (dona, fila, quem fechou, quem está chamando, rodízio e histórico).
 const usaNome = (l, n) => l.responsavel===n || l.filaDe===n || l.vendedoraMatricula===n || l.chamandoPor===n || (l.tentaram||[]).includes(n) || (l.historico||[]).some(h=>h.por===n);
 async function trocarNomeNosLeads(velho, novo){
@@ -1865,6 +1880,25 @@ list.addEventListener("click", async e=>{
     juntandoNome = true; jn0.disabled = true; jn0.textContent = "Juntando…";
     const r = await trocarNomeNosLeads(velho, novo); juntandoNome = false;
     toast(r===null ? "Parou no meio. Clique de novo para terminar." : `${r.length} lead(s) de "${velho}" agora estão com ${novo}`); render(); return; }
+  if(e.target.id==="faltaAbrir"){ faltaAberta = true; render(); return; }
+  if(e.target.id==="faltaNo"){ faltaAberta = false; render(); return; }
+  if(e.target.id==="faltaOk" && !atrasoRodando){
+    const quem = faltaQuem, t = today();
+    const nomes = [...document.querySelectorAll("[data-cobre]")].filter(c=>c.checked).map(c=>c.dataset.cobre);
+    if(!nomes.length){ toast("Escolha quem vai cobrir"); return; }
+    const alvo = leads.filter(l=>donaDe(l)===quem && l.proximo && l.proximo<=t).sort((a,b)=>a.proximo.localeCompare(b.proximo));
+    if(!alvo.length){ toast(`${quem} não tem contatos para hoje`); return; }
+    atrasoRodando = true; e.target.disabled = true; let n = 0;
+    for(const l of alvo){
+      const para = nomes.slice().sort((a,b)=>cargaDia(a,t,l.id)-cargaDia(b,t,l.id))[0];
+      const d = {proximo: l.proximo<t ? t : l.proximo}; if(l.responsavel) d.responsavel = para; else d.filaDe = para;
+      if(l.etapa==="matriculado") d.vendedoraMatricula = credito(l);
+      if(!(await patch(l.id, d, `${quem} faltou: passado para ${para}`, {espalhar:true}))) break;
+      if(l.responsavel) l.responsavel = para; else l.filaDe = para; if(ultimoPatch.proximo) l.proximo = ultimoPatch.proximo;
+      n++; e.target.textContent = `Passando… ${n} de ${alvo.length}`;
+    }
+    atrasoRodando = false; faltaAberta = false; toast(`${n} contato(s) de ${quem} passados para ${nomes.join(", ")}`); render(); return;
+  }
   if(e.target.id==="atrasoAbrir"){ atrasoAberto = !atrasoAberto; render(); return; }
   if(e.target.id==="atrasoOk" && !atrasoRodando){
     const nomes = [...document.querySelectorAll("[data-atrnome]")].filter(c=>c.checked).map(c=>c.dataset.atrnome);
@@ -1997,6 +2031,7 @@ list.addEventListener("change", async e=>{
   if(act==="resp"){ await patch(id, {responsavel:v}, `passado para ${v}`); toast(`Lead agora é da ${v}`); }
   if(pendingRender) render();
 });
+list.addEventListener("change", e=>{ if(e.target.id==="faltaQuem"){ faltaQuem = e.target.value; render(); } });
 list.addEventListener("change", e=>{ const m = e.target.id && e.target.id.match(/^x-(.+)-obj$/); if(!m) return;
   const pr = document.getElementById(`x-${m[1]}-prox`); if(!pr) return;
   pr.value = e.target.value==="semtempo" ? "0" : e.target.value==="conversando" ? "1" : "3"; });
