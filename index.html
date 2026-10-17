@@ -641,7 +641,8 @@ function extrasFields(st, prefix, l){
     <label class="f">Chamar em*<input type="date" id="${prefix}ped" min="${t}"></label>
     <label class="f">Motivo do pedido<input type="text" id="${prefix}pmot" placeholder="Ex.: para ver a matrícula de fevereiro"></label>`;
   if(STAGES[st].motivo) return `
-    <label class="f">Por que foi para a ${st==="naoquer" ? "lista de não chamar" : "lista fria"}?<select id="${prefix}mot">${MOTIVOS.map(m=>`<option${m===(l && l.motivoPerda || "Parou de responder")?" selected":""}>${esc(m)}</option>`).join("")}</select></label>`;
+    <label class="f">Por que foi para a ${st==="naoquer" ? "lista de não chamar" : "lista fria"}?<select id="${prefix}mot">${MOTIVOS.map(m=>{ const atual = (l && l.motivoPerda) || "Parou de responder"; const sel = MOTIVOS.includes(atual) ? m===atual : m==="Outro"; return `<option${sel?" selected":""}>${esc(m)}</option>`; }).join("")}</select></label>
+    <label class="f">Se for outro motivo, escreva qual<input type="text" id="${prefix}motxt" maxlength="120" placeholder="Ex.: mudou de cidade" value="${esc(l && l.motivoPerda && !MOTIVOS.includes(l.motivoPerda) ? l.motivoPerda : "")}"></label>`;
   return "";
 }
 function readExtras(st, prefix){
@@ -655,7 +656,9 @@ function readExtras(st, prefix){
     if(!o) return {err:"Escolha uma opção em \"O que travou?\""}; if(o==="outro" && r.length < 3) return {err:"Escreva como foi a conversa"};
     return {objecao:o, resumo:r, prox: pr==="" ? 3 : Number(pr)}; }
   if(st==="agendado"){ const p = v("ped"); if(!p || p<today()) return {err:"Escolha hoje ou uma data futura"}; return {pedidoData:p, pedidoMotivo:v("pmot")}; }
-  if(STAGES[st].motivo){ const m = v("mot"); if(!m) return {err:"Escolha o motivo"}; return {motivoPerda:m}; }
+  if(STAGES[st].motivo){ const m = v("mot"), tx = v("motxt"); if(!m) return {err:"Escolha o motivo"};
+    if(m==="Outro"){ if(tx.length < 3) return {err:"Escreva qual é o outro motivo"}; return {motivoPerda:tx}; }
+    return {motivoPerda:m}; }
   return {};
 }
 const needsExtras = st => st==="negociando" || st==="matriculado" || st==="agendado" || !!STAGES[st].motivo;
