@@ -1596,13 +1596,20 @@ function faltaHTML(L, t){
 // Troca um nome por outro em todos os campos dos leads (dona, fila, quem fechou, quem está chamando, rodízio e histórico).
 const usaNome = (l, n) => l.responsavel===n || l.filaDe===n || l.vendedoraMatricula===n || l.chamandoPor===n || (l.tentaram||[]).includes(n) || (l.historico||[]).some(h=>h.por===n);
 async function trocarNomeNosLeads(velho, novo){
-  const afetados = [...leads, ...lixeira].filter(l=>usaNome(l, velho));
+  const afetados = [...leads, ...lixeira].filter(l=>usaNome(l, velho)); const pend = [];
   for(const l of afetados){
     const d = {historico:[...(l.historico||[]).map(h=>h.por===velho ? {...h, por:novo} : h), {data:today(), em:new Date().toISOString(), acao:`nome "${velho}" passou a ser "${novo}"`, por:quemSou()}].slice(-20)};
     for(const k of ["responsavel","filaDe","vendedoraMatricula","chamandoPor"]) if(l[k]===velho) d[k] = novo;
     if((l.tentaram||[]).includes(velho)) d.tentaram = [...new Set(l.tentaram.map(n=>n===velho ? novo : n))];
-    try{ await db.collection("leads").doc(l.id).update(d); Object.assign(l, d); }catch(err){ return null; }
+    pend.push([l, d]);
   }
+  // grava em lotes (rápido e sem deixar metade dos leads com o nome antigo)
+  try{
+    for(let i=0; i<pend.length; i+=400){ const parte = pend.slice(i, i+400);
+      if(db.batch){ const b = db.batch(); for(const [l,d] of parte) b.update(db.collection("leads").doc(l.id), d); await b.commit(); }
+      else for(const [l,d] of parte) await db.collection("leads").doc(l.id).update(d);
+      for(const [l,d] of parte) Object.assign(l, d); }
+  }catch(err){ return null; }
   return afetados;
 }
 // Nomes que estão nos leads (como dona ou fila) mas não existem mais na equipe: nome antigo de alguém ou de quem saiu.
