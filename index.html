@@ -698,6 +698,7 @@ function cardHTML(l, full){
   if(l.etapa==="matriculado"){
     const f = firstDue(l); const feitos = l.posFeitos || [];
     info.push(`<span><b>Matrícula ${l.dataMatricula?br(l.dataMatricula):"sem data"}</b>${l.primeiroBoleto ? ` · <b>1º boleto ${brAno(l.primeiroBoleto)}</b>` : f ? ` · 1º boleto ${br(f)} <span style="color:var(--late);font-weight:600">(calculado, confira)</span>` : ""}${l.diaVencimento?` · demais no dia ${esc(l.diaVencimento)}`:""}${l.inicioAulas?` · <b>aulas a partir de ${brAno(l.inicioAulas)}</b>`:""}</span>`);
+    if(full) info.push(`<span><b>Matrícula conta para:</b> ${podeGerir() ? `<select data-act="credito" aria-label="Matrícula conta para">${[...new Set([credito(l), ...equipe].filter(Boolean))].map(n=>`<option${n===credito(l)?" selected":""}>${esc(n)}</option>`).join("")}</select>` : esc(credito(l)||"—")} · no mês de ${esc((MESES[Number(matDate(l).slice(5,7))-1]||"").toString())}</span>`);
     info.push(`<div class="steps">${POS.map(p=>`<span class="step ${feitos.includes(p.k)?"done":p.k===l.posAtual?"now":""}">${esc(p.curto)}</span>`).join("")}</div>`);
   }
   if(l.obs) info.push(`<span>${esc(l.obs)}</span>`);
@@ -985,11 +986,13 @@ function renderInicio(){
       <div class="tblwrap"><table class="rank">
         <thead><tr><th>#</th><th>Vendedora</th><th>Matrículas</th><th>Atendimentos</th><th>Leads conquistados</th><th>Meta do mês</th><th>Carteira ativa</th><th>Atrasados</th></tr></thead>
         <tbody>${rows.map((r,i)=>`<tr class="${r.n===eu?"eu":""}"><td>${i+1}º</td><td><span class="pill owner" style="--c:var(--p${ownerColor(r.n)})">${esc(r.n)}</span></td>
-          <td><b>${r.mats}</b></td><td>${r.atend}</td><td>${r.pegos}</td>
+          <td><button type="button" class="btn ghost" data-rkmat="${esc(r.n)}" title="Ver quais matrículas contaram" style="padding:2px 8px"><b>${r.mats}</b></button></td><td>${r.atend}</td><td>${r.pegos}</td>
           <td>${r.matsMes}/${r.meta}<span class="mini"><i style="width:${Math.min(100,Math.round(r.matsMes*100/r.meta))}%"></i></span></td>
           <td>${r.carteira}</td><td>${r.atras ? `<span style="color:var(--late);font-weight:600">${r.atras}</span>` : "0"}</td></tr>`).join("")}</tbody>
       </table></div>
-      <p class="note">Ordem: matrículas no período; empate decide por atendimentos. Atendimentos são mensagens marcadas como enviadas e respostas registradas no sistema. Leads conquistados são os que ela pegou na aba Sem vendedora.</p>
+      ${rankVer ? (()=>{ const ls = leads.filter(l=>l.etapa==="matriculado" && credito(l)===rankVer && inP(matDate(l))).sort((a,b)=>matDate(b).localeCompare(matDate(a)));
+        return `<div class="info" style="margin-top:8px"><b>Matrículas de ${esc(rankVer)} no período (${ls.length})</b>${ls.map(l=>`<span>${br(matDate(l))} · <button type="button" class="nome" data-fichaini="${l.id}">${esc(nomeExib(l))}</button> · ${esc(l.curso||"")}${l.responsavel && l.responsavel!==rankVer ? ` · hoje com ${esc(l.responsavel)}` : ""}</span>`).join("") || "<span>Nenhuma.</span>"}</div>`; })() : ""}
+      <p class="note">Clique no número de matrículas para ver quais contaram. Ordem: matrículas no período; empate decide por atendimentos. Atendimentos são mensagens marcadas como enviadas e respostas registradas no sistema. Leads conquistados são os que ela pegou na aba Sem vendedora.</p>
     </section>
     ${podeGerir() ? semanaHTML() + carteiraHTML() : ""}
     <p class="note">Dúvida sobre como marcar um lead? Veja a aba <b>Recados e guia</b>.</p>`}`;
@@ -1132,7 +1135,11 @@ function guiaHTML(){
     <p class="note" style="margin-top:.4rem">No card, os botões principais são <b>Abrir no WhatsApp</b>, <b>Marcar como enviada</b> e <b>Respondeu / Registrar conversa</b>. O resto (mudar situação, reagendar, passar para outra vendedora, editar) fica em <b>Mais opções</b>.</p></details>`;
 }
 function irPara(t){ tab = t; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab===t)); render(); window.scrollTo(0,0); }
-document.getElementById("inicio").addEventListener("click", e=>{ if(e.target.id==="btnBackup"){ exportarLeads(); return; } if(e.target.id==="btnVerRec"){ irPara("recados"); return; } const b = e.target.closest("[data-rper]"); if(b){ rankPer = b.dataset.rper; renderInicio(); } });
+let rankVer = null;
+document.getElementById("inicio").addEventListener("click", e=>{
+  const rk = e.target.closest("[data-rkmat]"); if(rk){ rankVer = rankVer===rk.dataset.rkmat ? null : rk.dataset.rkmat; renderInicio(); return; }
+  const fi = e.target.closest("[data-fichaini]"); if(fi){ fichaId = fi.dataset.fichaini; render(); return; }
+  if(e.target.id==="btnBackup"){ exportarLeads(); return; } if(e.target.id==="btnVerRec"){ irPara("recados"); return; } const b = e.target.closest("[data-rper]"); if(b){ rankPer = b.dataset.rper; renderInicio(); } });
 
 /* ---------- números ---------- */
 function periodRange(){
@@ -2074,7 +2081,10 @@ list.addEventListener("change", async e=>{
     await patch(id, {proximo:p}, p ? `reagendado para ${br(p)}` : "tirado da agenda");
     toast(p ? `Reagendado para ${br(p)}` : "Tirado da agenda");
   }
-  if(act==="resp"){ await patch(id, {responsavel:v}, `passado para ${v}`); toast(`Lead agora é da ${v}`); }
+  if(act==="credito"){ if(await patch(id, {vendedoraMatricula:v, creditoManual:true}, `matrícula passa a contar para ${v}`)) toast(`Matrícula agora conta para ${v}`); return; }
+  if(act==="resp"){
+    if(l.etapa==="matriculado"){ await patch(id, {responsavel:v, vendedoraMatricula:v, creditoManual:true}, `passado para ${v} · matrícula conta para ${v}`); toast(`Aluno agora é da ${v}, e a matrícula conta para ela`); }
+    else { await patch(id, {responsavel:v}, `passado para ${v}`); toast(`Lead agora é da ${v}`); } }
   if(pendingRender) render();
 });
 list.addEventListener("change", e=>{ if(e.target.id==="faltaQuem"){ faltaQuem = e.target.value; render(); } });
@@ -2214,7 +2224,11 @@ async function migrarFluxo(){
         Object.assign(d, {etapa:"novo", tentativas:MAX_TENT, proximo:maxDate(addDays(h.data, LONGO_DIAS), today()), motivoPerda:null, perdidoEm:null, voltouCadencia:true, cicloInicio: l.cicloInicio || String(l.criadoEm||"").slice(0,10) || today(), ciclos: l.ciclos || 1}); } }
     if(l.etapa==="perdido") d.etapa = "frio";
     if(l.etapa==="matriculado" && !l.vendedoraMatricula){ const c = creditoHistorico(l); if(c) d.vendedoraMatricula = c; }
-    else if(l.etapa==="matriculado" && !l.creditoRevisado){ const c = creditoSaida(l); if(c && c!==l.vendedoraMatricula) d.vendedoraMatricula = c; d.creditoRevisado = true; }
+    else if(l.etapa==="matriculado" && !l.creditoManual && !l.creditoCadastro){ const hs = l.historico || [];
+      if(hs[0] && /^(cadastrado|importado da planilha) · matriculado em/.test(hs[0].acao||"")){
+        let ult = ""; for(const h of hs){ const m = /^passado para (.+)$/.exec(h.acao||""); if(m && !/\(saída de |, que vai |faltou/.test(h.acao)) ult = m[1]; }
+        if(ult && ult!==l.vendedoraMatricula){ d.vendedoraMatricula = ult; } d.creditoCadastro = true; } }
+    if(l.etapa==="matriculado" && !l.creditoRevisado && !d.creditoCadastro){ const c = creditoSaida(l); if(c && c!==l.vendedoraMatricula) d.vendedoraMatricula = c; d.creditoRevisado = true; }
     if(!Object.keys(d).length && l.etapa==="novo" && (l.tentativas||0) >= MAX_TENT){
       const p = dadosPassagem(l, today(), maxDate(l.proximo || today(), today()));
       Object.assign(d, p.d); if(d.proximo){ const quem = d.responsavel || d.filaDe || ""; d.proximo = diaLivre(quem, d.proximo, l.id); }
