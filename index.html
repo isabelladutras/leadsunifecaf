@@ -247,8 +247,10 @@ input[type=file]{font-size:.88rem;max-width:100%}
       <label class="f">Nome <span style="font-weight:400">(deixe em branco se não souber)</span><input type="text" id="fNome" autocomplete="off"></label>
       <label class="f">WhatsApp (com DDD)*<input type="tel" id="fTel" required placeholder="21 99999-9999" autocomplete="off"></label>
       <label class="f">Curso de interesse<span id="fCursoBox"></span></label>
+      <label class="f">Modalidade<select id="fMod"><option value="">Não sei ainda</option><option>EAD</option><option>Semipresencial</option></select></label>
       <label class="f">Vendedora<select id="fResp"></select></label>
       <label class="f">Origem<select id="fOrigem"></select></label>
+      <label class="f" id="fAcaoBox" hidden>Empresa / local da ação de rua*<input type="text" id="fAcao" list="locaisRua" autocomplete="off" placeholder="Ex.: Supermercado Guanabara, Shopping Ilha"></label>
       <label class="f">Indicado por (aluno)<input type="text" id="fInd" list="alunosList" autocomplete="off" placeholder="Nome de quem indicou"></label>
       <label class="row" style="font-size:.88rem;font-weight:600;align-self:end"><input type="checkbox" id="fAntigo"> Lead antigo (já falou com a gente há um tempo)</label>
       <label class="f">Situação<select id="fEtapa"></select></label>
@@ -281,10 +283,12 @@ input[type=file]{font-size:.88rem;max-width:100%}
       <button class="tab" role="tab" data-tab="agenda" aria-selected="false">Agenda<span class="n" id="nAgenda"></span></button>
       <button class="tab" role="tab" data-tab="pos" aria-selected="false">Pós-matrícula<span class="n" id="nPos"></span></button>
       <button class="tab" role="tab" data-tab="todos" aria-selected="false">Todos<span class="n" id="nTodos"></span></button>
+      <button class="tab" role="tab" data-tab="rua" aria-selected="false">🚩 Ações de rua</button>
     </div>
     <div class="tgroup"><span class="tlabel">Gestão</span>
-      <button class="tab" role="tab" data-tab="campanhas" aria-selected="false">Lista fria<span class="n" id="nFria"></span></button>
+      <button class="tab" role="tab" data-tab="campanhas" aria-selected="false">Campanhas e Lista fria<span class="n" id="nFria"></span></button>
       <button class="tab" role="tab" data-tab="numeros" aria-selected="false">Números</button>
+      <button class="tab adm" role="tab" data-tab="matriculas" aria-selected="false" hidden>Matrículas</button>
       <button class="tab adm" role="tab" data-tab="equipe" aria-selected="false" hidden>Equipe</button>
       <button class="tab adm" role="tab" data-tab="config" aria-selected="false" hidden>Configurações</button>
     </div>
@@ -302,26 +306,35 @@ input[type=file]{font-size:.88rem;max-width:100%}
   <div id="recModal" class="rec-modal" role="dialog" aria-modal="true" aria-labelledby="recModalTit" hidden></div>
   <div id="campanha" class="list" hidden>
     <section class="panel">
-      <h3 class="sec">Lista fria: novas ofertas</h3>
-      <p class="tplhelp">Aqui ficam os leads que pararam de responder ou desistiram. Escreva a oferta, filtre pelo motivo e mande um por um pelo WhatsApp. Quem responder volta para <b>Em atendimento</b>.</p>
+      <h3 class="sec">Campanhas e Lista fria</h3>
+      <p class="tplhelp">Escolha o público, escreva a oferta e mande um por um pelo WhatsApp. Quem responder vai para <b>Em atendimento</b>. Matriculados, quem pediu para não ser chamado e quem não terminou o ensino médio nunca entram.</p>
+      <div class="row" style="margin-bottom:8px"><button class="btn primary" type="button" id="campBF">🖤 Usar campanha Black Friday (até 30/11)</button></div>
       <div class="grid2">
         <label class="f">Nome da campanha<input type="text" id="campNome" placeholder="Ex.: Condição de outubro"></label>
+        <label class="f">Público<select id="campPub"></select></label>
+      </div>
+      <div id="campFriaFiltros"><div class="grid2">
         <label class="f">Entraram na lista fria nos últimos<select id="campDias"><option value="30">30 dias</option><option value="90">90 dias</option><option value="180">180 dias</option><option value="tudo" selected>Qualquer data</option></select></label>
       </div>
       <div class="chips" id="campSit"></div>
-      <div class="chips" id="campMot"></div>
+      <div class="chips" id="campMot"></div></div>
       <label class="f">Mensagem<textarea id="campMsg"></textarea></label>
-      <p class="tplhelp">Use <code>{nome}</code>, <code>{curso}</code> e <code>{responsavel}</code>. Para variar o texto, escreva 2 ou 3 versões separadas por uma linha só com <code>---</code>. Quem pediu para não ser chamado nunca entra aqui.</p>
+      <p class="tplhelp">Use <code>{nome}</code>, <code>{curso}</code>, <code>{responsavel}</code> e <code>{ofertaBF}</code> (preço da Black Friday do curso do lead, conforme o edital). Para variar o texto, escreva 2 ou 3 versões separadas por uma linha só com <code>---</code>. Quem pediu para não ser chamado nunca entra aqui.</p>
     </section>
     <p class="note" id="campResumo"></p>
     <div id="campList" class="list"></div>
   </div>
   <div id="numeros" class="list" hidden></div>
+  <div id="matriculas" class="list" hidden></div>
+  <div id="ruaBox" class="list" hidden></div>
   <div id="equipeBox" class="list" hidden></div>
   <div id="config" class="list" hidden></div>
 </div>
 <datalist id="alunosList"></datalist>
+<datalist id="locaisRua"></datalist>
 <div class="toast" id="toast" hidden></div>
+<div id="novaVersao" hidden style="position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:70;background:var(--accent);color:var(--accent-ink);border-radius:12px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.3);gap:10px;align-items:center;max-width:calc(100vw - 32px)">
+  <span><b>Tem atualização do sistema.</b> Toque para carregar a versão nova.</span><button class="btn" type="button" onclick="location.reload()">Atualizar</button></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -331,6 +344,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
 <script>if("serviceWorker" in navigator){ window.addEventListener("load", ()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }</script>
 <script>
 /* ---------- regras ---------- */
+const APP_VERSION = "2026-11-03b";   // mude a cada atualização: quem estiver com a versão antiga recebe o aviso para atualizar
 const MAX_TENT = 3, RETRY_DIAS = 2, META_PADRAO = 30;
 const LIMITE_DIA = 100;   // máximo de contatos automáticos por vendedora por dia; o que passar vai para o dia seguinte
 const LONGO_DIAS = 15, CICLO_DIAS = 150, MAX_CICLOS = 2;   // quem já respondeu (Em atendimento) e sumiu: depois de 3 tentativas, a cada 15 dias; 5 meses por vendedora
@@ -338,8 +352,8 @@ const LONGO_DIAS = 15, CICLO_DIAS = 150, MAX_CICLOS = 2;   // quem já respondeu
 // gaps = dias entre a 1ª e a 2ª, e entre a 2ª e a 3ª mensagem; passa = dias até a próxima vendedora se apresentar.
 const RODIZIO = [{gaps:[4,7], passa:7}, {gaps:[7,14], passa:14}, {gaps:[14,30], passa:null}];
 const STAGES = {
-  novo:        {label:"Ainda não respondeu",        dias:1,  tpl:"novo",       retry:true, hint:"lead novo, ninguém conversou ainda", grupo:"semresp"},
-  negociando:  {label:"Em atendimento",             dias:3,  tpl:"negociando", retry:true, hint:"o lead respondeu e está conversando", grupo:"atend"},
+  novo:        {label:"Ainda não respondeu",        dias:0,  tpl:"novo",       retry:true, hint:"lead novo, ninguém conversou ainda", grupo:"semresp"},
+  negociando:  {label:"Em atendimento",             dias:1,  tpl:"negociando", retry:true, hint:"o lead respondeu e está conversando", grupo:"atend"},
   informado:   {label:"Informações enviadas",       dias:1,  tpl:"informado",  retry:true, hint:"já mandou valores e informações e a pessoa não respondeu; volta em 2 h 30 no mesmo dia", grupo:"atend"},
   agendado:    {label:"Pediu para chamar depois",   dias:null, tpl:"agendado", retry:true, hint:"volta sozinho na data pedida", grupo:"agendado"},
   semmedio:    {label:"Não terminou o ensino médio", dias:180, tpl:"semmedio", retry:true, hint:"interagiu, mas ainda não concluiu o ensino médio; volta sozinho em 6 meses", grupo:"agendado"},
@@ -351,6 +365,12 @@ const STAGES = {
 const OBJECOES = [["semtempo","Sem tempo agora, vai responder depois"],["conversando","Conversa andando bem, sem objeção"],["preco","Preço / valor"],["horario","Horário / falta de tempo"],["familia","Vai decidir com a família"],["curso","Dúvida sobre o curso ou diploma"],["documentos","Documentação / processo"],["sumiu","Sumiu sem dar motivo"],["naorespondeu","Não respondeu"],["outro","Outro (escrevo no resumo)"]];
 const NAO_OBJECAO = ["semtempo","conversando","outro"];
 const OBJ_MENU = ["conversando","semtempo","preco","familia","curso","outro"];
+// Registro rápido da interação: o que aconteceu (um toque), temperatura (define o retorno) e próximo passo.
+const ACOES = [["audio","Mandei áudio"],["valores","Mandei valores"],["ligou","Liguei"],["visitou","Visitou o polo"],["desconto","Pediu desconto"],["pensar","Vai pensar"],["docs","Mandou documentos"]];
+const TEMPS = [["quente","🔥 Quente",1],["morno","Morno",2],["frio","❄️ Frio",5]];
+const tempDias = k => (TEMPS.find(x=>x[0]===k)||[,,2])[2];
+const tempLabel = k => (TEMPS.find(x=>x[0]===k)||[,""])[1];
+const acaoLabel = k => (ACOES.find(x=>x[0]===k)||[,k])[1];
 const objLabel = k => (OBJECOES.find(o=>o[0]===k)||[,""])[1];
 const CURSOS_PADRAO = ["Administração", "Adm Tech", "Análise e Desenvolvimento de Sistemas", "Arquitetura e Urbanismo", "Biomedicina", "Ciência de Dados", "Ciências Contábeis", "Computação em Nuvem", "Creator e Digital Influencer", "Design de Interiores", "Design Gráfico", "Educação Física (Bacharelado)", "Educação Física (Licenciatura)", "Engenharia Civil", "Engenharia de Computação", "Engenharia de Produção", "Engenharia Elétrica", "Estética e Cosmética", "Farmácia", "Fisioterapia", "Gestão Comercial", "Gestão da Tecnologia da Informação", "Gestão de Recursos Humanos", "Gestão de Segurança Privada", "Gestão de Segurança Pública", "Gestão do Agronegócio", "Gestão Financeira", "Gestão Pública", "Inteligência Artificial e Automação Digital", "Logística", "Marketing", "Marketing Digital", "Nutrição", "Pedagogia", "Processos Gerenciais", "Psicopedagogia", "Radiologia", "Segurança Cibernética", "Sistemas de Informação", "Terapia Ocupacional", "Pós-graduação"];
 let CURSOS = CURSOS_PADRAO.slice();
@@ -361,10 +381,14 @@ function cursoSel(idBase, valor){
 }
 function lerCurso(idBase){ const sel = document.getElementById(idBase); if(!sel) return ""; if(sel.value==="__outro"){ const o = document.getElementById(idBase+"-outro"); return o ? o.value.trim() : ""; } return sel.value; }
 document.addEventListener("change", e=>{ const b = e.target.dataset && e.target.dataset.cursosel; if(!b) return; const o = document.getElementById(b+"-outro"); if(o){ o.hidden = e.target.value!=="__outro"; if(!o.hidden) o.focus(); } });
-const ORIGENS = ["Instagram","WhatsApp direto","Indicação","Site / Google","Panfleto / evento","Passou no polo","Outro"];
+const RUA = "Ação de rua";
+const MODALIDADES = ["EAD","Semipresencial"];
+const modSel = (id, val) => `<select id="${id}"><option value="">Não sei ainda</option>${MODALIDADES.map(m=>`<option${m===val?" selected":""}>${m}</option>`).join("")}</select>`;
+const ORIGENS = ["Instagram","WhatsApp direto","Indicação",RUA,"Site / Google","Panfleto / evento","Passou no polo","Outro"];
 const MOTIVOS = ["Parou de responder","Preço","Sem tempo / horário","Desistiu de estudar agora","Foi para outra faculdade","Outro"];
 const POS = [
-  {k:"pos_d7", label:"Contato de 7 dias", curto:"7 dias"}
+  {k:"pos_d7", label:"Contato de 7 dias", curto:"7 dias"},
+  {k:"pos_indic", label:"Pedido de indicação (30 dias)", curto:"Indicação"}
 ];
 const DEFAULT_TPL = {
   novo: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Posso te enviar alguns áudios explicando sobre a faculdade e os valores?\n---\nOi, {nome}! Aqui é a {responsavel}, do polo UniFECAF 😊 Vi seu interesse em fazer faculdade. Posso te mandar um áudio rapidinho com os cursos e valores?\n---\nOlá, {nome}! Tudo certo? Sou a {responsavel}, do polo UniFECAF. Quer que eu te explique por áudio como funcionam as aulas e as condições de matrícula?",
@@ -402,23 +426,57 @@ const DEFAULT_TPL = {
   pos_boleto: "Oi, {nome}! Passando para lembrar que o seu primeiro boleto vence em {vencimento}. Se precisar da 2ª via ou tiver alguma dúvida, é só me chamar aqui.",
   pos_inicio: "Oi, {nome}! Suas aulas do curso de {curso} começam hoje! 🎉 Qualquer dúvida sobre o portal, as aulas ou os encontros no polo, estamos por aqui. Bons estudos!",
   pos_d30: "Oi, {nome}! Já completou um mês de aulas. Como está sendo o curso de {curso}? Está conseguindo acompanhar as aulas e o portal?",
+  pos_indic: "Oi, {nome}! Já faz um mês que você começou o curso de {curso} 😊 Uma pergunta rápida: você conhece alguém que também pensa em fazer faculdade? Pode ser amigo, colega de trabalho ou da família. Me passa o contato que eu cuido com o mesmo carinho que cuidei de você.\n---\nOi, {nome}! Como estão as aulas de {curso}? Se tiver alguém aí perto querendo começar a faculdade, me indica? É só me mandar o nome e o WhatsApp que eu chamo com todo cuidado 😊",
+  temp_quente: "Oi, {nome}! Vamos garantir a sua vaga no curso de {curso}? Te mando agora o link da matrícula e te acompanho em cada passo.\n---\n{nome}, já está tudo certo para você começar. Posso abrir a sua matrícula agora? Leva uns 5 minutinhos.\n---\nOi, {nome}! Só falta você confirmar para eu reservar a sua vaga no curso de {curso}. Fechamos hoje?\n---\n{nome}, me diz o que falta para a gente fechar a sua matrícula que eu resolvo por aqui.",
+  temp_frio: "Oi, {nome}! Vou ser breve: ainda tem interesse no curso de {curso}? Me responde com SIM ou NÃO que eu já organizo aqui.\n---\nOi, {nome}! {provasocial} Se ainda quiser começar, te ajudo com tudo por aqui.\n---\n{nome}, vou deixar seu atendimento em pausa para não te incomodar. Se quiser retomar o curso de {curso}, é só me responder 😊",
+  visitou: "Oi, {nome}! Foi um prazer te receber aqui no polo 😊 Ficou alguma dúvida sobre o curso de {curso}? Se quiser, já deixo a sua matrícula encaminhada.\n---\n{nome}, depois de conhecer o polo, o que achou? Quer que eu reserve a sua vaga no curso de {curso}?\n---\nOi, {nome}! Lembra da nossa conversa aqui no polo? Consigo finalizar a sua matrícula por aqui mesmo, rapidinho. Vamos?",
   pos_d60: "Oi, {nome}! Que bom ter você com a gente na UniFECAF. Se tiver algum amigo ou familiar pensando em fazer faculdade, me passa o contato que eu cuido dele com o mesmo carinho.",
   pos_remat: "Oi, {nome}! A rematrícula do próximo semestre está chegando. Quer que eu te ajude a garantir a sua vaga no curso de {curso}?"
 };
 // Textos padrão antigos: se a mensagem salva for igual a um deles, usamos a versão nova (com mais estratégias).
 const TPL_ANTIGOS = {"negociando": ["Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se tiver qualquer dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\nOi, {nome}, tudo bem? Passando para saber se ficou alguma dúvida sobre o curso de {curso}. Estou por aqui!\n---\n{nome}, tudo certo? Queria saber o que você achou das informações do curso de {curso}. Posso te ajudar em algo?", "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se ficou alguma dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\n{nome}, uma coisa que ajuda muito quem trabalha: no semipresencial você estuda no seu ritmo e só vem ao polo nos encontros. Quer que eu te mostre como fica a rotina no curso de {curso}?\n---\nOi, {nome}! As matrículas para a próxima turma estão abertas e a condição deste mês ainda está valendo. Quer que eu já reserve a sua vaga no curso de {curso}?\n---\n{nome}, não quero ficar te enchendo de mensagem 😊 Me diz só: ainda faz sentido começar a faculdade agora ou prefere que eu te chame mais para frente?\n---\nOi, {nome}! Passando para saber como você está. Ainda pensa em fazer {curso}? Se quiser, te mando as condições atualizadas."], "obj_preco": ["Oi, {nome}! Fiquei pensando no que você falou sobre o valor. Consegui ver uma condição de parcelamento para o curso de {curso} que pode caber melhor. Posso te mandar um áudio rapidinho explicando?", "Oi, {nome}! Fiquei pensando no que você falou sobre o valor. Consegui ver uma condição de parcelamento para o curso de {curso} que pode caber melhor. Posso te mandar um áudio rapidinho explicando?\n---\n{nome}, fiz uma conta rápida: dividindo por dia, a mensalidade do curso de {curso} fica bem menor do que parece. Quer que eu te mande a simulação certinha?\n---\nOi, {nome}! Me diz com sinceridade: se o valor coubesse no seu bolso, você começaria agora? Me fala até quanto dá para investir por mês que eu vejo a melhor opção para você.\n---\n{nome}, saiu condição nova de matrícula este mês. Posso te mandar os valores atualizados do curso de {curso} para você comparar?\n---\nOi, {nome}! Lembrei de você porque temos condições novas para o curso de {curso}. Quer dar uma olhada?"], "obj_horario": ["Oi, {nome}! Lembrei que o seu receio era o tempo. No semipresencial você organiza os estudos no seu ritmo e os encontros no polo são poucos. Quer que eu te mostre como fica a rotina?", "Oi, {nome}! Lembrei que o seu receio era o tempo. No semipresencial você organiza os estudos no seu ritmo e os encontros no polo são poucos. Quer que eu te mostre como fica a rotina?\n---\n{nome}, temos muitos alunos que trabalham o dia todo e estudam à noite, até pelo celular. Quer que eu te conte como eles organizam a semana?\n---\nOi, {nome}! Quer que eu te mostre quanto tempo por semana o curso de {curso} pede? Assim você vê se cabe na sua rotina antes de decidir.\n---\n{nome}, se o tempo for o único ponto, a gente monta juntos um plano de estudos que caiba na sua semana. Vamos?\n---\nOi, {nome}! Sua rotina deu uma folga? Se a faculdade ainda estiver nos seus planos, te passo as condições deste mês."], "obj_familia": ["Oi, {nome}! Conseguiu conversar em casa sobre a faculdade? Se ajudar, posso te mandar um resumo com valores e duração do curso de {curso} para você mostrar para eles.", "Oi, {nome}! Conseguiu conversar em casa sobre a faculdade? Se ajudar, posso te mandar um resumo com valores e duração do curso de {curso} para você mostrar para eles.\n---\nOi, {nome}! Se ajudar, posso conversar direto com quem vai decidir com você. É só me passar o melhor horário.\n---\n{nome}, conseguiram decidir em casa? Se surgiu alguma dúvida deles, me manda que eu respondo.\n---\nOi, {nome}! Preparei um resumo bem simples do curso de {curso}: duração, valores e reconhecimento do MEC. Te mando para mostrar em casa?\n---\nOi, {nome}! Passando para saber se vocês decidiram sobre a faculdade. Estou por aqui para o que precisar."], "obj_curso": ["Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?", "Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?\n---\n{nome}, separei algumas áreas em que quem se forma em {curso} costuma trabalhar. Quer que eu te mande?\n---\nOi, {nome}! Ainda está em dúvida sobre o curso? Se quiser, te ajudo a comparar com outras opções da área que você gosta.\n---\n{nome}, me conta o que você imagina fazer depois de se formar que eu te digo qual curso combina mais com isso.\n---\nOi, {nome}! Já decidiu qual curso quer fazer? Te passo as condições deste mês para o que você escolher."], "obj_documentos": ["Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?", "Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?\n---\nOi, {nome}! Faltou só a documentação para garantir sua vaga. Pode me mandar as fotos por aqui mesmo, que eu confiro para você.\n---\n{nome}, se estiver faltando algum documento, me diz qual que eu te explico como conseguir rapidinho.\n---\nOi, {nome}! Sua vaga no curso de {curso} está quase garantida, só falta a documentação. Conseguimos finalizar hoje?\n---\nOi, {nome}! Ainda dá para concluir sua matrícula no curso de {curso}. Quer retomar a parte dos documentos?"], "obj_sumiu": ["Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?", "Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?\n---\nOi, {nome}! Tudo bem por aí? Fiquei pensando se aconteceu alguma coisa. Se a faculdade ainda estiver nos seus planos, estou aqui.\n---\n{nome}, vou ser breve: ainda tem interesse no curso de {curso}? Me responde com SIM ou NÃO que eu já organizo aqui.\n---\n{nome}, vou deixar seu atendimento em pausa para não te incomodar. Se quiser retomar o curso de {curso}, é só me responder 😊\n---\nOi, {nome}! Faz um tempo que conversamos. Temos condições novas de matrícula, quer que eu te passe?"], "obj_semtempo": ["Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊", "Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊\n---\nOi, {nome}! Sei que a rotina está corrida. Prefere que eu te mande um áudio curtinho para ouvir quando puder?\n---\n{nome}, qual o melhor horário para a gente conversar 5 minutinhos sobre o curso de {curso}?\n---\nOi, {nome}! Te mando um resumo por escrito, assim você lê no seu tempo. Pode ser?\n---\nOi, {nome}! A agenda deu uma folga? Ainda dá para começar o curso de {curso} nesta turma."], "obj_conversando": ["Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?", "Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?\n---\n{nome}, ficou faltando só a gente definir o próximo passo. Posso te mandar o link da matrícula?\n---\nOi, {nome}! Retomando: tem alguma dúvida que eu possa tirar agora para você seguir com a matrícula?\n---\n{nome}, as matrículas da próxima turma estão abertas. Quer garantir a sua vaga no curso de {curso}?\n---\nOi, {nome}! Ainda pensa em começar o curso de {curso}? Te passo as condições atualizadas."], "obj_outro": ["Oi, {nome}! Tudo bem? Passando para retomarmos nossa conversa sobre o curso de {curso}. Posso te ajudar com algo?", "Oi, {nome}! Tudo bem? Passando para retomarmos nossa conversa sobre o curso de {curso}. Posso te ajudar com algo?\n---\nOi, {nome}! Fiquei com a nossa conversa na cabeça. Posso te ajudar com mais alguma informação sobre o curso de {curso}?\n---\n{nome}, ainda faz sentido conversarmos sobre a faculdade agora? Se preferir mais para frente, me diz quando que eu te chamo.\n---\nOi, {nome}! As matrículas para a próxima turma estão abertas. Quer que eu reserve a sua vaga?\n---\nOi, {nome}! Passando para saber se a faculdade ainda está nos seus planos. Estou por aqui."], "obj_naorespondeu": ["Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?\n---\nOi, {nome}! Não sei se você conseguiu ver minhas mensagens. Posso te mandar um resumo rapidinho do curso de {curso}?", "Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?\n---\nOi, {nome}! Não sei se você conseguiu ver minhas mensagens. Posso te mandar um resumo rapidinho do curso de {curso}?\n---\nOi, {nome}! Vou ser breve: ainda tem interesse no curso de {curso}? Me responde com SIM ou NÃO que eu já organizo aqui.\n---\n{nome}, vou encerrar por aqui para não te incomodar. Se mudar de ideia, é só me chamar 😊\n---\nOi, {nome}! Temos condições novas de matrícula este mês. Quer que eu te passe?"], "rot_preco": ["• Valide: \"entendo, é um investimento importante\"\n• Traga o valor para o dia a dia (quanto dá por dia)\n• Apresente o parcelamento e a condição vigente, se houver\n• Lembre o retorno: o que o diploma muda no salário ou na carreira dela\n• Feche com escolha: \"prefere começar com a condição A ou B?\""], "rot_horario": ["• Pergunte como é a rotina dela hoje (trabalho, filhos)\n• Explique como funcionam as aulas e os encontros no polo\n• Dê um exemplo real de aluna com rotina parecida que está conseguindo\n• Sugira quanto tempo por dia ela precisaria reservar\n• Pergunte: \"com isso, cabe na sua rotina?\""], "rot_naorespondeu": ["• Áudio de até 1 minuto resumindo o principal: curso, formato e valor\n• Uma pergunta simples no final, de sim ou não\n• Evite mandar muitas mensagens seguidas"], "rot_sumiu": ["• Áudio curto (menos de 30 segundos), tom leve, sem cobrança\n• Lembre em uma frase o que vocês conversaram\n• Traga uma novidade (condição, prazo de início das aulas)\n• Pergunte se ainda faz sentido ou se prefere retomar mais para frente"]};
 const TPL_GROUPS = [
-  {title:"Leads", keys:[["novo","Ainda não respondeu: primeira mensagem"],["novo_retorno","Ainda não respondeu: 2ª e 3ª mensagens de cada vendedora (em ordem: as 2 primeiras são da 1ª vendedora, as 2 seguintes da 2ª e as 2 últimas da 3ª)"],["negociando","Em atendimento (quando não há conversa registrada)"],["agendado","Pediu para chamar depois"],["semmedio","Não terminou o ensino médio (retorno em 6 meses)"],["frio","Parou de responder (nova tentativa após 30 dias)"]]},
+  {title:"Leads", keys:[["novo","Ainda não respondeu: primeira mensagem"],["temp_quente","Em atendimento 🔥 quente (fechamento direto)"],["temp_frio","Em atendimento ❄️ frio"],["visitou","Visitou o polo"],["novo_retorno","Ainda não respondeu: 2ª e 3ª mensagens de cada vendedora (em ordem: as 2 primeiras são da 1ª vendedora, as 2 seguintes da 2ª e as 2 últimas da 3ª)"],["negociando","Em atendimento (quando não há conversa registrada)"],["agendado","Pediu para chamar depois"],["semmedio","Não terminou o ensino médio (retorno em 6 meses)"],["frio","Parou de responder (nova tentativa após 30 dias)"]]},
   {title:"Follow-up pelo que travou (usadas em ordem, uma por tentativa; quando acabam, recomeçam pela 2ª. Separe cada uma com ---)", keys:OBJECOES.map(([k,t])=>["obj_"+k, t])},
   {title:"Roteiros de áudio (tópicos do que falar)", keys:[["rot_novo","Primeiro áudio (lead novo)"], ...OBJECOES.map(([k,t])=>["rot_"+k, t])]},
   {title:"Apresentação", keys:[["antigo","Lead antigo (não sabemos nada dele)"],["reapresentacao","Lead passado para outra vendedora porque não respondeu"],["rot_antigo","Roteiro do áudio para lead antigo"]]},
-  {title:"Pós-matrícula (única mensagem do comercial)", keys:[["pos_semana","7 dias após o início das aulas (ou da matrícula, se o início não foi informado)"]]}
+  {title:"Pós-matrícula (mensagens do comercial)", keys:[["pos_semana","7 dias após o início das aulas (ou da matrícula, se o início não foi informado)"],["pos_indic","30 dias após o início: pedido de indicação"]]}
 ];
 
 let db = null, leads = [], tpl = {...DEFAULT_TPL}, equipe = ["Isabella"], rematJanelas = [], metas = {};
 let dupOk = false, impText = "", impParsed = null, importing = false;
+// Black Friday UniFECAF 2026 (edital, vigência 03/11 a 30/11/2026). Mensalidade do 1º semestre; 2º semestre em diante com 50% de bolsa.
+// EAD: turma de dezembro/2026. Semipresencial: turma de janeiro/2027. Cursos não listados seguem a tabela normal.
+const BF_FIM = "2026-11-30";
+const BF_EAD = ["Administração","Ciências Contábeis","Design de Interiores","Design Gráfico","Gestão Comercial","Gestão do Agronegócio","Gestão de Recursos Humanos","Gestão de Segurança Privada","Gestão de Segurança Pública","Gestão Financeira","Gestão Pública","Logística","Marketing","Marketing Digital","Processos Gerenciais","Análise e Desenvolvimento de Sistemas","Ciência de Dados","Computação em Nuvem","Defesa Cibernética","Gestão da Tecnologia da Informação","Sistemas de Informação","Creator e Digital Influencer"];
+const BF_SEMI = ["Administração","Ciências Contábeis","Gestão Comercial","Gestão de Recursos Humanos","Gestão Financeira","Gestão Pública","Logística","Marketing","Marketing Digital","Processos Gerenciais","Psicopedagogia","Análise e Desenvolvimento de Sistemas","Gestão da Tecnologia da Informação","Design de Interiores","Design Gráfico","Engenharia de Computação","Biomedicina","Educação Física (Bacharelado)","Educação Física (Licenciatura)","Estética e Cosmética","Farmácia","Fisioterapia","Nutrição","Radiologia","Terapia Ocupacional","Arquitetura e Urbanismo","Engenharia Civil","Engenharia de Produção","Engenharia Elétrica","Serviço Social"];
+function ofertaBF(curso, mod){
+  const c = norm(curso||""); const tem = arr => arr.some(x=>norm(x)===c);
+  const lista = "a mensalidade do 1º semestre fica em:\n• R$ 99,00 nos cursos EAD participantes (turma de dezembro)\n• R$ 149,00 em Pedagogia semipresencial (turma de janeiro)\n• R$ 199,99 nos semipresenciais participantes (turma de janeiro)";
+  if(!c) return lista;
+  if(c===norm("Pedagogia")) return `no curso de ${curso} a mensalidade do 1º semestre fica em R$ 149,00 (semipresencial, turma de janeiro).`;
+  let e = tem(BF_EAD), sm = tem(BF_SEMI);
+  if(mod==="EAD" && e) sm = false; if(mod==="Semipresencial" && sm) e = false;
+  if(e && sm) return `no curso de ${curso} a mensalidade do 1º semestre fica em R$ 99,00 no EAD (turma de dezembro) ou R$ 199,99 no semipresencial (turma de janeiro).`;
+  if(e) return `no curso de ${curso} a mensalidade do 1º semestre fica em R$ 99,00 (EAD, turma de dezembro).`;
+  if(sm) return `no curso de ${curso} a mensalidade do 1º semestre fica em R$ 199,99 (semipresencial, turma de janeiro).`;
+  return lista;
+}
+const BF_MSG = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Chegou a Black Friday UniFECAF 🖤\nSó para matrículas feitas até 30/11, {ofertaBF}\nE do 2º semestre em diante você tem 50% de bolsa. Quer que eu garanta a sua vaga?\n---\n{nome}, a Black Friday da UniFECAF começou e lembrei de você 🖤 Até 30/11, {ofertaBF}\nDo 2º semestre em diante, 50% de bolsa. Posso te explicar como funciona?";
 const CAMP_DEFAULT = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Abrimos uma condição especial de matrícula para o curso de {curso} e lembrei de você. Quer que eu te passe os detalhes?";
 const campSit = new Set(["frio","perdido"]), campMot = new Set();
+// Público da campanha. Matriculados (não podem usar promoções de ingresso), quem pediu para não ser chamado e quem não terminou o ensino médio nunca entram.
+const CAMP_PUBS = [["fria","Lista fria"],["base","Toda a base que ainda não matriculou"],["semresp","Ainda não responderam"],["atend","Em atendimento"],["agendado","Pediram para chamar depois"]];
+let campPub = "fria";
+try{ campPub = localStorage.getItem("campPub") || "fria"; }catch(e){}
+function campPubOk(l){
+  if(["matriculado","naoquer","semmedio"].includes(l.etapa)) return false;
+  if(campPub==="base") return true;
+  if(campPub==="semresp") return l.etapa==="novo";
+  if(campPub==="atend") return l.etapa==="negociando" || l.etapa==="informado";
+  if(campPub==="agendado") return l.etapa==="agendado";
+  return l.etapa==="frio" || l.etapa==="perdido";
+}
 let agMes = "", agDia = "";
 const avisoHorario = {};
 function foraDeHorario(){ const h = new Date().getHours(); return h < 8 || h >= 21; }
@@ -476,6 +534,7 @@ const num1 = v => (Math.round(v*10)/10).toString().replace(".",",");
 const pct = (a,b) => b ? Math.round(a*100/b)+"%" : "–";
 function toast(msg){ const t = document.getElementById("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(()=>t.hidden=true, 2800); }
 const mine = () => leads.filter(l => resp==="todas" || l.responsavel===resp || (!l.responsavel && l.filaDe===resp));
+const deRua = l => l.origem===RUA;
 const matDate = l => String(l.dataMatricula || l.matriculadoEm || "").slice(0,10);
 // Quem fechou a matrícula. Não muda quando o aluno passa para outra vendedora (ex.: saída de alguém da equipe).
 const credito = l => l.vendedoraMatricula || l.responsavel || "";
@@ -528,6 +587,7 @@ function nextRemat(l){
 function posDate(l, k){
   if(!l.dataMatricula) return null;
   if(k==="pos_d7") return addDays(l.inicioAulas || l.dataMatricula,7);
+  if(k==="pos_indic") return addDays(l.inicioAulas || l.dataMatricula,30);
   if(k==="pos_boleto"){ const f = firstDue(l); return f ? addDays(f,-3) : null; }
   if(k==="pos_inicio") return l.inicioAulas ? String(l.inicioAulas).slice(0,10) : null;
   if(k==="pos_d30") return addDays(l.inicioAulas || l.dataMatricula,30);
@@ -548,7 +608,11 @@ function rotKey(l){
   if(["novo","informado"].includes(l.etapa) && tpl.rot_novo) return "rot_novo";
   return null;
 }
-function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual==="pos_d7" ? "pos_semana" : null;
+function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual==="pos_d7" ? "pos_semana" : l.posAtual==="pos_indic" ? "pos_indic" : null;
+  if(l.etapa==="negociando" && (!l.objecao || l.objecao==="conversando")){
+    if((l.acoes||[]).includes("visitou") && tpl.visitou) return "visitou";
+    if(l.temperatura==="quente" && tpl.temp_quente) return "temp_quente";
+    if(l.temperatura==="frio" && tpl.temp_frio) return "temp_frio"; }
   if(l.etapa==="novo" && (l.tentativas||0)===0 && l.reapresentar) return "reapresentacao";
   if(l.etapa==="novo" && (l.tentativas||0)===0 && l.antigo) return "antigo";
   if(l.etapa==="novo" && (l.tentativas||0)>0 && tpl.novo_retorno) return "novo_retorno";
@@ -562,7 +626,7 @@ function provaSocial(){ const n = leads.filter(l=>l.etapa==="matriculado" && mat
 function variacao(t, l, k){ let partes = String(t).split(/\n\s*---\s*\n/).map(x=>x.trim()).filter(Boolean);
   partes = partes.filter(x=>(!x.includes("{inicioTurma}") || prazoOk(prazos.inicioTurma)) && (!x.includes("{prazoCondicao}") || prazoOk(prazos.prazoCondicao)));
   if(partes.length<2) return partes[0] || "";
-  if(k==="negociando" || /^obj_/.test(k||"")){ const n = partes.length, t = l.tentativas||0;   // em ordem: cada tentativa usa uma estratégia diferente
+  if(k==="negociando" || /^obj_/.test(k||"") || /^temp_/.test(k||"") || k==="visitou"){ const n = partes.length, t = l.tentativas||0;   // em ordem: cada tentativa usa uma estratégia diferente
     return partes[t < n ? t : 1 + (t - n) % (n - 1)]; }
   if(k==="rot") return partes[(l.tentativas||0) % partes.length];
   if(k==="novo_retorno"){ const n = partes.length, c = Math.min(Math.max((l.ciclos||1),1), RODIZIO.length) - 1, tt = Math.min(Math.max(l.tentativas||1,1), 2);
@@ -578,6 +642,7 @@ function fillTpl(l){
           .replaceAll("{vencimento}", f ? br(f) : "breve")
           .replaceAll("{inicio}", l.inicioAulas ? br(l.inicioAulas) : "em breve")
           .replaceAll("{resumo}", l.resumo || "")
+          .replaceAll("{ofertaBF}", ofertaBF(l.curso, l.modalidade))
           .replaceAll("{provasocial}", provaSocial())
           .replaceAll("{inicioTurma}", prazos.inicioTurma ? br(prazos.inicioTurma) : "breve")
           .replaceAll("{prazoCondicao}", prazos.prazoCondicao ? br(prazos.prazoCondicao) : "o fim do mês");
@@ -604,18 +669,21 @@ function status(l){
 function stageData(l, st, x){
   const s = STAGES[st], t = today(), d = {etapa:st, tentativas:0};
   if(st==="matriculado"){
+    if(x.origem){ d.origem = x.origem; d.acaoRua = x.acaoRua; }
+    if(x.modalidade) d.modalidade = x.modalidade;
     Object.assign(d, {vendedoraMatricula: l.responsavel || meuNome() || null, dataMatricula:x.dataMatricula, diaVencimento:x.diaVencimento, primeiroBoleto:x.primeiroBoleto || null, inicioAulas:x.inicioAulas || null, matriculadoEm:x.dataMatricula || l.matriculadoEm || t,
       posFeitos:[], posSemResposta:0, risco:false, riscoAvisado:null});
     const nx = nextPos({...l, ...d}); d.posAtual = nx.key; d.proximo = nx.date;
   } else if(st==="negociando" && x && x.objecao){
-    Object.assign(d, {objecao:x.objecao, resumo:x.resumo, resumoEm:t, resumoPor:meuNome()||userEmail, proximo:addDays(t, x.prox!=null ? x.prox : s.dias), cicloInicio:t, ciclos:1, reapresentar:false});
+    Object.assign(d, {objecao:x.objecao, resumo:x.resumo, resumoEm:t, resumoPor:meuNome()||userEmail, proximo:addDays(t, x.prox!=null ? x.prox : s.dias), cicloInicio:t, ciclos:1, reapresentar:false,
+      temperatura:x.temp||null, proxPasso:x.passo||"", acoes:x.acoes||[], tentativas:0});
   } else if(st==="informado"){
     Object.assign(d, retornoInfo(), {infoEm:t, cicloInicio: l.cicloInicio || t, ciclos: l.ciclos || 1});
   } else if(st==="agendado"){
     Object.assign(d, {pedidoData:x.pedidoData, pedidoMotivo:x.pedidoMotivo || "", proximo:x.pedidoData});
   } else if(s.motivo){
     Object.assign(d, {motivoPerda:x.motivoPerda, perdidoEm:t, proximo:null});
-  } else d.proximo = s.dias ? addDays(t, s.dias) : null;
+  } else d.proximo = s.dias!=null ? addDays(t, s.dias) : null;
   if(st==="semmedio"){ d.semMedioEm = t; if(!l.responsavel && meuNome()){ d.responsavel = meuNome(); d.filaDe = null; } }
   return d;
 }
@@ -624,7 +692,7 @@ function stageHist(st, x){
   if(st==="agendado") return `pediu contato em ${brAno(x.pedidoData)}${x.pedidoMotivo?` (${x.pedidoMotivo})`:""}`;
   if(st==="matriculado") return x.primeiroBoleto ? `matriculado em ${br(x.dataMatricula)}, 1º boleto em ${brAno(x.primeiroBoleto)}${x.inicioAulas?`, aulas a partir de ${brAno(x.inicioAulas)}`:""}` : `matriculado em ${br(x.dataMatricula)}, boleto vence dia ${x.diaVencimento}`;
   if(s.motivo) return `${s.label}: ${x.motivoPerda}`;
-  if(st==="negociando" && x && x.objecao) return `Em conversa · ${objLabel(x.objecao)}${x.resumo ? ` · "${x.resumo}"` : ""}`;
+  if(st==="negociando" && x && x.objecao) return `Em conversa${x.temp?` · ${tempLabel(x.temp)}`:""}${x.acoes && x.acoes.length ? ` · ${x.acoes.map(acaoLabel).join(", ")}` : ""} · ${objLabel(x.objecao)}${x.resumo ? ` · "${x.resumo}"` : ""}${x.passo ? ` · próximo passo: ${x.passo}` : ""}`;
   return `mudou para ${s.label}`;
 }
 function extrasFields(st, prefix, l){
@@ -632,10 +700,18 @@ function extrasFields(st, prefix, l){
   if(st==="matriculado") return `
     <label class="f">Data da matrícula*<input type="date" id="${prefix}mat" value="${esc(l && l.dataMatricula || t)}"></label>
     <label class="f">Vencimento do 1º boleto*<input type="date" id="${prefix}bol" value="${esc(l && l.primeiroBoleto || "")}"></label>
-    <label class="f">Início das aulas*<input type="date" id="${prefix}ini" value="${esc(l && l.inicioAulas || "")}"></label>`;
+    <label class="f">Início das aulas*<input type="date" id="${prefix}ini" value="${esc(l && l.inicioAulas || "")}"></label>
+    ${prefix!=="f-" ? `<label class="f">Modalidade${modSel(prefix+"mod", l && l.modalidade || "")}</label>` : ""}
+    ${prefix!=="f-" ? `<label class="f">De onde veio essa matrícula?*<select id="${prefix}ori"><option value="">Escolha…</option>${ORIGENS.map(o=>`<option${l && o===l.origem?" selected":""}>${esc(o)}</option>`).join("")}</select></label>
+    <label class="f">Se foi ação de rua: empresa / local<input type="text" id="${prefix}acao" list="locaisRua" value="${esc(l && l.acaoRua || "")}" placeholder="Ex.: Supermercado Guanabara"></label>` : ""}`;
   if(st==="negociando") return `
-    <label class="f">Como está a conversa?*<select id="${prefix}obj"><option value="">Escolha…</option>${OBJECOES.filter(([k])=>OBJ_MENU.includes(k) || (l && l.objecao===k)).sort((a,b)=>OBJ_MENU.indexOf(a[0])-OBJ_MENU.indexOf(b[0])).map(([k,t])=>`<option value="${k}"${l && l.objecao===k ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
-    <label class="f">Chamar de novo<select id="${prefix}prox"><option value="0">Hoje mais tarde</option><option value="1">Amanhã</option><option value="2">Em 2 dias</option><option value="3" selected>Em 3 dias</option><option value="7">Em 7 dias</option></select></label>
+    <div class="f" style="grid-column:1/-1"><span style="font-weight:600;font-size:.85rem">O que aconteceu? <span style="font-weight:400">(toque em tudo que vale)</span></span>
+      <div class="chips">${ACOES.map(([k,t])=>`<label class="pill" style="cursor:pointer"><input type="checkbox" data-acaopref="${prefix}" value="${k}"> ${esc(t)}</label>`).join("")}</div></div>
+    <div class="f" style="grid-column:1/-1"><span style="font-weight:600;font-size:.85rem">Temperatura do lead*</span>
+      <div class="chips">${TEMPS.map(([k,t,dd])=>`<label class="pill" style="cursor:pointer"><input type="radio" name="${prefix}temp" value="${k}"${l && l.temperatura===k ? " checked" : ""}> ${esc(t)} <span class="note" style="margin:0">(volta em ${dd} dia${dd>1?"s":""})</span></label>`).join("")}</div></div>
+    <label class="f" style="grid-column:1/-1">Próximo passo <span style="font-weight:400">(uma linha, aparece no topo do card)</span><input type="text" id="${prefix}passo" maxlength="120" placeholder="Ex.: mandar simulação de Pedagogia; esperar ela falar com o marido" value="${esc(l && l.proxPasso || "")}"></label>
+    <label class="f">O que está travando? <span style="font-weight:400">(opcional)</span><select id="${prefix}obj"><option value="">Nada, conversa andando</option>${OBJECOES.filter(([k])=>OBJ_MENU.includes(k) || (l && l.objecao===k)).sort((a,b)=>OBJ_MENU.indexOf(a[0])-OBJ_MENU.indexOf(b[0])).map(([k,t])=>`<option value="${k}"${l && l.objecao===k ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+    <label class="f">Chamar de novo<select id="${prefix}prox"><option value="" selected>Pela temperatura (recomendado)</option><option value="0">Hoje mais tarde</option><option value="1">Amanhã</option><option value="2">Em 2 dias</option><option value="3">Em 3 dias</option><option value="7">Em 7 dias</option></select></label>
     <label class="f" style="grid-column:1/-1">Como foi a conversa <span style="font-weight:400">(escreva do seu jeito)</span><textarea id="${prefix}res" maxlength="400" rows="2" placeholder="Ex.: estava no trabalho, disse que me chama à noite; achou caro e pediu para ver parcelamento">${esc(l && l.resumo || "")}</textarea></label>`;
   if(st==="agendado") return `
     <label class="f">Chamar em*<input type="date" id="${prefix}ped" min="${t}"></label>
@@ -651,10 +727,19 @@ function readExtras(st, prefix){
     if(!mat) return {err:"Informe a data da matrícula"}; if(!bol) return {err:"Informe a data de vencimento do 1º boleto"};
     if(bol < mat) return {err:"O 1º boleto não pode vencer antes da matrícula"};
     if(!ini) return {err:"Informe a data de início das aulas"}; if(ini < mat) return {err:"O início das aulas não pode ser antes da matrícula"};
-    return {dataMatricula:mat, primeiroBoleto:bol, diaVencimento:Number(bol.slice(8,10)), inicioAulas:ini}; }
-  if(st==="negociando"){ const o = v("obj"), r = v("res"), pr = v("prox");
-    if(!o) return {err:"Escolha uma opção em \"O que travou?\""}; if(o==="outro" && r.length < 3) return {err:"Escreva como foi a conversa"};
-    return {objecao:o, resumo:r, prox: pr==="" ? 3 : Number(pr)}; }
+    const res = {dataMatricula:mat, primeiroBoleto:bol, diaVencimento:Number(bol.slice(8,10)), inicioAulas:ini};
+    if(document.getElementById(prefix+"ori")){ const o = v("ori"), a = v("acao");
+      if(!o) return {err:"Escolha de onde veio a matrícula (ex.: Ação de rua, Instagram)"};
+      if(o===RUA && a.length < 2) return {err:"Escreva a empresa ou o local da ação de rua"};
+      res.origem = o; res.acaoRua = o===RUA ? a : null; }
+    if(document.getElementById(prefix+"mod") && v("mod")) res.modalidade = v("mod");
+    return res; }
+  if(st==="negociando"){ const o = v("obj") || "conversando", r = v("res"), pr = v("prox"), passo = v("passo");
+    const tp = (document.querySelector(`input[name="${prefix}temp"]:checked`)||{}).value || "";
+    const acoes = [...document.querySelectorAll(`input[data-acaopref="${prefix}"]:checked`)].map(x=>x.value);
+    if(!tp) return {err:"Escolha a temperatura do lead: quente, morno ou frio"};
+    if(o==="outro" && r.length < 3) return {err:"Escreva como foi a conversa"};
+    return {objecao:o, resumo:r, temp:tp, acoes, passo, prox: pr==="" ? tempDias(tp) : Number(pr)}; }
   if(st==="agendado"){ const p = v("ped"); if(!p || p<today()) return {err:"Escolha hoje ou uma data futura"}; return {pedidoData:p, pedidoMotivo:v("pmot")}; }
   if(STAGES[st].motivo){ const m = v("mot"), tx = v("motxt"); if(!m) return {err:"Escolha o motivo"};
     if(m==="Outro"){ if(tx.length < 3) return {err:"Escreva qual é o outro motivo"}; return {motivoPerda:tx}; }
@@ -683,6 +768,7 @@ function cardHTML(l, full){
     `<span class="pill stage">${esc(stage.label)}</span>`];
   if(l.etapa==="matriculado" && !l.primeiroBoleto) pills.push(`<span class="pill risk">Falta data do 1º boleto</span>`);
   if(l.etapa==="matriculado" && !l.inicioAulas) pills.push(`<span class="pill today">Falta início das aulas</span>`);
+  if(l.temperatura && ["negociando","informado"].includes(l.etapa)) pills.push(`<span class="pill ${l.temperatura==="quente"?"risk":l.temperatura==="frio"?"muted":"today"}">${esc(tempLabel(l.temperatura))}</span>`);
   if(l.risco) pills.push(`<span class="pill risk">${l.riscoAvisado ? "Em risco · Permanência avisada" : "Em risco · avisar Permanência"}</span>`);
   if(isPool(l) && l.filaDe) pills.push(`<span class="pill owner" style="--c:var(--p${ownerColor(l.filaDe)})">Fila: ${esc(l.filaDe)}</span>`);
   if(isPool(l) && l.chamandoEm===today() && l.chamandoPor) pills.push(`<span class="pill today">${l.chamandoPor===meuNome() ? "Você está chamando" : `${esc(firstName(l.chamandoPor))} está chamando`}</span>`);
@@ -725,6 +811,8 @@ function cardHTML(l, full){
         <label class="f">Indicado por (aluno)<input type="text" id="ed-ind-${id}" list="alunosList" autocomplete="off" value="${esc(l.indicadoPor||"")}"></label>
         <label class="row" style="font-size:.88rem;font-weight:600;align-self:end"><input type="checkbox" id="ed-antigo-${id}"${l.antigo?" checked":""}> Lead antigo</label>
         <label class="f">Origem<select id="ed-origem-${id}"><option value="">Não sei ainda</option>${ORIGENS.map(o=>`<option${o===l.origem?" selected":""}>${esc(o)}</option>`).join("")}</select></label>
+        <label class="f">Modalidade${modSel(`ed-mod-${id}`, l.modalidade||"")}</label>
+        <label class="f">Empresa / local da ação de rua<input type="text" id="ed-acao-${id}" list="locaisRua" value="${esc(l.acaoRua||"")}" placeholder="Só se a origem for Ação de rua"></label>
         ${l.etapa==="matriculado"?`<label class="f">Vencimento do 1º boleto*<input type="date" id="ed-bol-${id}" value="${esc(l.primeiroBoleto || "")}"></label>
         <label class="f">Início das aulas<input type="date" id="ed-ini-${id}" value="${esc(l.inicioAulas || "")}"></label>`:""}
       </div>
@@ -734,13 +822,15 @@ function cardHTML(l, full){
   return `<article class="card ${st.cls}" data-id="${id}">
     <div class="top">
       <div class="who"><h3>${full ? (temNome(l.nome) ? esc(l.nome) : `<span style="color:var(--muted)">Sem nome</span>`) : `<button type="button" class="nome" data-ficha="${id}" title="Abrir ficha">${temNome(l.nome) ? esc(l.nome) : `<span style="color:var(--muted)">Sem nome</span>`}</button>`}</h3>
-        <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}</span>`:""}${l.origem?`<span>via ${esc(l.origem)}</span>`:""}${l.indicadoPor?`<span>indicado por ${esc(l.indicadoPor)}</span>`:""}</div></div>
+        <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}${l.modalidade?` · ${esc(l.modalidade)}`:""}</span>`:""}${l.origem?`<span>${deRua(l) ? `<b style="color:var(--today)">🚩 Ação de rua${l.acaoRua?` · ${esc(l.acaoRua)}`:""}</b>` : `via ${esc(l.origem)}`}</span>`:""}${l.indicadoPor?`<span>indicado por ${esc(l.indicadoPor)}</span>`:""}</div></div>
       <div class="pills">${pills.join("")}</div>
     </div>
+    ${l.proxPasso && ["negociando","informado","agendado"].includes(l.etapa) ? `<div class="ctx" style="border-left:4px solid var(--accent)"><span><b>➡️ Próximo passo:</b> ${esc(l.proxPasso)}</span>${(l.acoes||[]).length ? `<span class="note" style="margin:0">Na última conversa: ${esc(l.acoes.map(acaoLabel).join(" · "))}</span>` : ""}</div>` : ""}
     ${l.objecao && !["matriculado","perdido","naoquer"].includes(l.etapa) ? `<div class="ctx"><span><b>${NAO_OBJECAO.includes(l.objecao) || l.objecao==="naorespondeu" ? "Situação" : "Travou"}:</b> ${esc(objLabel(l.objecao))}</span>${l.resumo?`<span><b>Última conversa${l.resumoEm?` (${br(l.resumoEm)}${l.resumoPor?`, ${esc(firstName(l.resumoPor))}`:""})`:""}:</b> ${esc(l.resumo)}</span>`:""}</div>` : ""}
     ${info.length?`<div class="info">${info.join("")}</div>`:""}
     ${canMsg && podeMexer(l)?`<details class="msg"${st.cls==="late"||st.cls==="today"?" open":""}><summary>Mensagem pronta${l.etapa==="matriculado"&&l.posAtual?` · ${esc(POS.find(p=>p.k===l.posAtual).label)}`:""}</summary>
       <textarea id="msg-${id}" data-draft="${id}">${esc(text)}</textarea></details>`:""}
+    ${l.ultimaMsg && l.ultimaMsg.texto && l.etapa!=="matriculado" ? `<details class="msg"><summary>Última mensagem enviada · ${br(l.ultimaMsg.data)}${l.ultimaMsg.por?` · ${esc(firstName(l.ultimaMsg.por))}`:""}</summary><div class="rot">${esc(l.ultimaMsg.texto).replace(/\n/g,"<br>")}</div></details>` : ""}
     ${rotKey(l) && podeMexer(l) ? `<details class="msg"><summary>Roteiro do áudio · ${esc(rotKey(l)==="rot_novo" ? "primeiro contato" : objLabel(l.objecao))}</summary><div class="rot">${esc(variacao(tpl[rotKey(l)]||"", l, "rot")).replace(/\n/g,"<br>")}</div></details>` : ""}
     ${l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l) && !pendingEdit.has(l.id) ? `<div class="stagebox"><b>Falta a data do 1º boleto</b>
       <p class="tplhelp">Obrigatório. Confira no sistema da faculdade e informe a data certa de vencimento do primeiro boleto.</p>
@@ -788,7 +878,7 @@ function renderFicha(){
     <div class="ficha-top"><b>Ficha do lead</b><button class="btn" type="button" id="fichaFechar">Fechar</button></div>
     <div class="info" style="background:var(--surface)">
       ${linha("WhatsApp", esc(phoneFmt(l.telefone)))}${linha("Vendedora", esc(l.responsavel || (l.filaDe ? "Sem vendedora · fila da "+l.filaDe : "Sem vendedora")))}
-      ${linha("Curso", esc(l.curso||""))}${linha("Origem", esc(l.origem||""))}${linha("Indicado por", esc(l.indicadoPor||""))}
+      ${linha("Curso", esc(l.curso||""))}${linha("Origem", esc((l.origem||"") + (deRua(l) && l.acaoRua ? ` · ${l.acaoRua}` : "")))}${linha("Indicado por", esc(l.indicadoPor||""))}
       ${linha("Cadastrado em", l.criadoEm ? brAno(l.criadoEm) : "")}${linha("Último envio", l.ultimoEnvio ? brAno(l.ultimoEnvio) : "")}
       ${linha("Próximo contato", l.proximo ? brAno(l.proximo) : "sem data")}${l.antigo ? `<span><b>Lead antigo</b></span>` : ""}
     </div>
@@ -818,7 +908,8 @@ function render(){
   document.body.classList.toggle("modo-foco", focoAtivo && tab==="hoje");
   renderFicha();
   const t = today(); const L = mine().filter(l=>l.responsavel || (isPool(l) && l.filaDe)); const pool = leads.filter(isPool);
-  const due = L.filter(l=>l.proximo && l.proximo<=t && !aguardaHora(l)).sort((x,y)=>x.proximo.localeCompare(y.proximo)||String(x.nome).localeCompare(y.nome));
+  const quenteP = l => l.temperatura==="quente" && ["negociando","informado"].includes(l.etapa) ? 0 : 1;
+  const due = L.filter(l=>l.proximo && l.proximo<=t && !aguardaHora(l)).sort((x,y)=>quenteP(x)-quenteP(y) || x.proximo.localeCompare(y.proximo)||String(x.nome).localeCompare(y.nome));
   const fut = L.filter(l=>l.proximo && l.proximo>t).sort((x,y)=>x.proximo.localeCompare(y.proximo));
   const alunos = L.filter(l=>l.etapa==="matriculado");
   document.getElementById("sLate").textContent = L.filter(l=>l.proximo && l.proximo<t).length;
@@ -827,10 +918,18 @@ function render(){
   document.getElementById("sRisk").textContent = alunos.filter(l=>l.risco).length;
   { const mm = metas[mesKey()] || {}; const quem = resp==="todas" ? equipe : [resp];
     const meta = quem.reduce((a,n)=>a+(Number(mm[n]) || META_PADRAO), 0);
-    const feitas = leads.filter(l=>l.etapa==="matriculado" && (resp==="todas" || credito(l)===resp) && matDate(l).slice(0,7)===mesKey()).length;
+    const doMes = leads.filter(l=>l.etapa==="matriculado" && (resp==="todas" || credito(l)===resp) && matDate(l).slice(0,7)===mesKey());
+    const feitas = doMes.length, rua = doMes.filter(deRua).length;
+    // Ritmo da semana: semana de segunda a domingo, dentro do mês.
+    const tt = today(), ini = maxDate(addDays(tt, -((parse(tt).getDay()+6)%7)), mesKey()+"-01");
+    const daSemana = doMes.filter(l=>matDate(l)>=ini).length;
+    const semanasRest = Math.max(1, Math.ceil(diasUteisRestantes()/5));
+    const faltaIni = Math.max(0, meta - (feitas - daSemana));
+    const porSemana = Math.ceil(faltaIni / semanasRest);
     const falta = Math.max(0, meta-feitas), du = diasUteisRestantes();
-    document.getElementById("metaStrip").innerHTML = `<div class="l1"><span><b>${resp==="todas"?"Equipe":esc(resp)} · ${mesNome()}:</b> ${feitas} de ${meta} matrículas (${pct(feitas,meta)})</span>
+    document.getElementById("metaStrip").innerHTML = `<div class="l1"><span><b>${resp==="todas"?"Equipe":esc(resp)} · ${mesNome()}:</b> ${feitas} de ${meta} matrículas (${pct(feitas,meta)}) · <b style="color:var(--today)">🚩 ${rua} de ação de rua</b> <span class="note" style="margin:0">(comissão em dobro)</span></span>
       <span>${falta===0 ? "Meta batida" : `Faltam ${falta} · ${du ? num1(falta/du)+" por dia útil" : "mês encerrado"}`}</span></div>
+      ${falta>0 && du ? `<div class="l1" style="font-size:.85rem"><span><b>Esta semana:</b> ${daSemana} de ${porSemana} ${daSemana>=porSemana ? "✅ semana batida" : `· faltam ${porSemana-daSemana} até domingo`}</span><span class="note" style="margin:0">ritmo para fechar o mês: ${porSemana} por semana</span></div>` : ""}
       <div class="track"><div class="fill" style="width:${Math.min(100, meta ? Math.round(feitas*100/meta) : 0)}%"></div></div>`; }
   document.getElementById("nHoje").textContent = due.length||"";
   { const eu = meuNome(); const vis = (resp==="todas" && podeGerir()) ? pool : pool.filter(l=>!l.filaDe || l.filaDe===eu || l.filaDe===resp);
@@ -843,7 +942,7 @@ function render(){
   document.getElementById("nTodos").textContent = mine().length||"";
 
   const list = document.getElementById("list"), num = document.getElementById("numeros"), cfg = document.getElementById("config"), camp = document.getElementById("campanha");
-  list.hidden = ["config","numeros","campanhas","equipe","inicio","recados"].includes(tab); document.getElementById("inicio").hidden = tab!=="inicio"; document.getElementById("recados").hidden = tab!=="recados"; document.getElementById("equipeBox").hidden = tab!=="equipe"; num.hidden = tab!=="numeros"; cfg.hidden = tab!=="config"; camp.hidden = tab!=="campanhas";
+  list.hidden = ["config","numeros","campanhas","equipe","inicio","recados","matriculas","rua"].includes(tab); document.getElementById("matriculas").hidden = tab!=="matriculas"; document.getElementById("ruaBox").hidden = tab!=="rua"; document.getElementById("inicio").hidden = tab!=="inicio"; document.getElementById("recados").hidden = tab!=="recados"; document.getElementById("equipeBox").hidden = tab!=="equipe"; num.hidden = tab!=="numeros"; cfg.hidden = tab!=="config"; camp.hidden = tab!=="campanhas";
   document.getElementById("filtros").hidden = tab!=="todos";
   if(tab==="config"){ renderConfig(); return; }
   if(tab==="campanhas"){ renderCampList(); return; }
@@ -851,6 +950,8 @@ function render(){
   if(tab==="recados"){ renderRecados(); return; }
   if(tab==="equipe"){ renderEquipe(); return; }
   if(tab==="numeros"){ renderNumeros(); return; }
+  if(tab==="matriculas"){ renderMatriculas(); return; }
+  if(tab==="rua"){ renderRua(); return; }
   if(!db){ list.innerHTML = emptyHTML("Conectando…","Carregando os leads da equipe."); return; }
 
   if(tab==="semdona"){
@@ -895,7 +996,7 @@ function render(){
       return;
     }
     const semBolH = isPerm() ? 0 : L.filter(l=>l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l)).length;
-    list.innerHTML = faltaHTML(L, t) + nomesForaHTML() + atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
+    list.innerHTML = faltaHTML(L, t) + quentesHTML(L, t) + nomesForaHTML() + atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
                     : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula.")));
     const tarde = L.filter(aguardaHora).sort((x,y)=>x.retornoHora.localeCompare(y.retornoHora));
@@ -941,6 +1042,115 @@ function render(){
   }
 }
 
+/* ---------- ações de rua ---------- */
+let acoes = [];
+function atualizarLocais(){ const dl = document.getElementById("locaisRua"); if(!dl) return;
+  const ls = [...new Set([...acoes.map(a=>a.local), ...leads.filter(deRua).map(l=>l.acaoRua)].filter(Boolean).map(x=>String(x).trim()))].sort((a,b)=>a.localeCompare(b));
+  const html = ls.map(n=>`<option value="${esc(n)}">`).join(""); if(dl.innerHTML!==html) dl.innerHTML = html; }
+function renderRua(){
+  const el = document.getElementById("ruaBox");
+  if(el.contains(document.activeElement) && ["INPUT","TEXTAREA"].includes(document.activeElement.tagName)) return;
+  const t = today(), mes = mesKey(), eu = meuNome();
+  const rua = leads.filter(deRua);
+  // resultado por local
+  const g = {};
+  for(const l of rua){ const k = norm(l.acaoRua||"(sem local)"); const x = g[k] = g[k] || {local:l.acaoRua||"(sem local)", leads:0, mats:0, matsMes:0, acoes:0, ult:""};
+    x.leads++; if(l.etapa==="matriculado"){ x.mats++; if(matDate(l).slice(0,7)===mes) x.matsMes++; } }
+  for(const a of acoes){ const k = norm(a.local||""); const x = g[k] = g[k] || {local:a.local, leads:0, mats:0, matsMes:0, acoes:0, ult:""}; x.acoes++; if(a.data>x.ult) x.ult = a.data; }
+  const locais = Object.values(g).sort((a,b)=>b.mats-a.mats || b.leads-a.leads);
+  // por vendedora no mês
+  const doMes = acoes.filter(a=>String(a.data).slice(0,7)===mes);
+  const vend = equipe.map(n=>({n, acoes:doMes.filter(a=>(a.quem||[]).includes(n)).length,
+    mats:leads.filter(l=>l.etapa==="matriculado" && deRua(l) && credito(l)===n && matDate(l).slice(0,7)===mes).length,
+    leads:rua.filter(l=>String(l.criadoEm||"").slice(0,7)===mes && (l.responsavel===n || (l.historico||[])[0]?.por===n)).length}))
+    .sort((a,b)=>b.mats-a.mats || b.acoes-a.acoes);
+  const recentes = acoes.slice().sort((a,b)=>String(b.data).localeCompare(String(a.data))).slice(0,30);
+  const capt = a => rua.filter(l=>norm(l.acaoRua||"")===norm(a.local||"") && String(l.criadoEm||"").slice(0,10)>=a.data && String(l.criadoEm||"").slice(0,10)<=addDays(a.data,2));
+  el.innerHTML = `<section class="panel">
+      <h3 class="sec">Registrar ação de rua</h3>
+      <p class="tplhelp">Registre cada saída. Depois, ao cadastrar os leads dessa ação, escolha a origem <b>🚩 Ação de rua</b> e o mesmo local: o sistema mostra quantos leads e matrículas cada lugar trouxe. Matrícula de rua vale comissão em dobro.</p>
+      <div class="grid2"><label class="f">Data<input type="date" id="ruaData" value="${t}"></label>
+        <label class="f">Empresa / local*<input type="text" id="ruaLocal" list="locaisRua" placeholder="Ex.: Supermercado Guanabara" autocomplete="off"></label></div>
+      <div class="f"><span style="font-weight:600;font-size:.85rem">Quem foi</span><div class="chips">${equipe.map(n=>`<label class="pill" style="cursor:pointer"><input type="checkbox" data-ruaquem="${esc(n)}"${n===eu?" checked":""}> ${esc(n)}</label>`).join("")}</div></div>
+      <label class="f">Observação<input type="text" id="ruaObs" maxlength="160" placeholder="Ex.: panfletagem na saída do turno, 40 contatos"></label>
+      <div class="row"><button class="btn primary" type="button" id="ruaSalvar">Registrar ação</button></div>
+    </section>
+    <section class="panel">
+      <h3 class="sec">Este mês por vendedora</h3>
+      <div class="tblwrap"><table class="rank"><thead><tr><th>Vendedora</th><th>Ações de rua</th><th>Leads de rua cadastrados</th><th>🚩 Matrículas de rua</th></tr></thead>
+      <tbody>${vend.map(v=>`<tr${v.n===eu?' class="eu"':""}><td>${esc(v.n)}</td><td>${v.acoes}</td><td>${v.leads}</td><td><b style="color:var(--today)">${v.mats}</b></td></tr>`).join("")}</tbody></table></div>
+    </section>
+    <section class="panel">
+      <h3 class="sec">Quais lugares dão resultado</h3>
+      ${locais.length ? `<div class="tblwrap"><table class="rank"><thead><tr><th>Local</th><th>Ações</th><th>Leads</th><th>Matrículas</th><th>Conversão</th><th>Matrículas este mês</th><th>Última ação</th></tr></thead>
+      <tbody>${locais.map(x=>`<tr><td>${esc(x.local)}</td><td>${x.acoes}</td><td>${x.leads}</td><td><b>${x.mats}</b></td><td>${pct(x.mats, x.leads)}</td><td>${x.matsMes}</td><td>${x.ult ? br(x.ult) : "–"}</td></tr>`).join("")}</tbody></table></div>` : `<p class="note">Ainda não há ações nem leads de rua registrados.</p>`}
+    </section>
+    <section class="panel">
+      <h3 class="sec">Últimas ações</h3>
+      ${recentes.length ? recentes.map(a=>{ const c = capt(a); return `<div class="info" style="gap:4px"><span><b>${br(a.data)} · ${esc(a.local)}</b> · ${esc((a.quem||[]).join(", ")||"—")}</span>${a.obs?`<span>${esc(a.obs)}</span>`:""}<span class="note" style="margin:0">${c.length} lead(s) cadastrados até 2 dias depois · ${c.filter(l=>l.etapa==="matriculado").length} matrícula(s)</span>${podeGerir() ? `<div class="row"><button class="btn ghost danger" type="button" data-ruadel="${esc(a.id)}">Apagar</button></div>` : ""}</div>`; }).join("") : `<p class="note">Nenhuma ação registrada ainda.</p>`}
+    </section>`;
+}
+document.getElementById("ruaBox").addEventListener("click", async e=>{
+  if(!db) return;
+  if(e.target.id==="ruaSalvar"){
+    const data = document.getElementById("ruaData").value, local = document.getElementById("ruaLocal").value.trim(), obs = document.getElementById("ruaObs").value.trim();
+    const quem = [...document.querySelectorAll("[data-ruaquem]")].filter(c=>c.checked).map(c=>c.dataset.ruaquem);
+    if(!data){ toast("Escolha a data"); return; } if(local.length < 2){ toast("Escreva a empresa ou o local"); return; } if(!quem.length){ toast("Marque quem foi"); return; }
+    e.target.disabled = true;
+    try{ await db.collection("acoes").add({data, local, quem, obs, por: quemSou(), em: new Date().toISOString()}); toast("Ação registrada 🚩");
+      document.getElementById("ruaLocal").value = ""; document.getElementById("ruaObs").value = ""; }
+    catch(err){ toast(err.code==="permission-denied" ? "Sem permissão: a Isabella precisa publicar as regras novas do Firebase." : "Não salvou. Tente de novo."); }
+    e.target.disabled = false; return;
+  }
+  const del = e.target.closest("[data-ruadel]");
+  if(del){ if(del.dataset.ok!=="1"){ del.dataset.ok = "1"; del.textContent = "Confirmar: apagar"; return; }
+    try{ await db.collection("acoes").doc(del.dataset.ruadel).delete(); toast("Ação apagada"); }catch(err){ toast("Não foi possível apagar."); } }
+});
+
+/* ---------- matrículas por mês (administradora) ---------- */
+let matMes = "", matVend = null;
+const nomeMes = k => { const [y,m] = k.split("-").map(Number); return `${MESES[m-1]} de ${y}`; };
+const mesesAntes = (k, n) => { const out = []; let [y,m] = k.split("-").map(Number); for(let i=0;i<n;i++){ out.push(`${y}-${pad(m)}`); m--; if(!m){ m = 12; y--; } } return out; };
+function renderMatriculas(){
+  const el = document.getElementById("matriculas");
+  if(el.contains(document.activeElement) && document.activeElement.tagName==="SELECT") return;
+  if(!matMes) matMes = mesKey();
+  const mats = leads.filter(l=>l.etapa==="matriculado" && matDate(l));
+  const doMes = mats.filter(l=>matDate(l).slice(0,7)===matMes);
+  const mm = metas[matMes] || {};
+  const nomes = [...new Set([...equipe, ...doMes.map(l=>credito(l)||"Sem vendedora")])];
+  const rows = nomes.map(n=>{ const ls = doMes.filter(l=>(credito(l)||"Sem vendedora")===n); const rua = ls.filter(deRua).length;
+    const meta = equipe.includes(n) ? (Number(mm[n]) || META_PADRAO) : 0; return {n, ls, tot:ls.length, rua, meta}; })
+    .filter(r=>r.tot || equipe.includes(r.n)).sort((a,b)=>b.tot-a.tot || a.n.localeCompare(b.n));
+  const T = {tot:doMes.length, rua:doMes.filter(deRua).length, meta:rows.reduce((a,r)=>a+r.meta,0)};
+  const lista = mesesAntes(mesKey(), 12);
+  const seis = mesesAntes(matMes, 6).reverse();
+  const quem6 = [...new Set([...equipe, ...mats.filter(l=>seis.includes(matDate(l).slice(0,7))).map(l=>credito(l)||"Sem vendedora")])];
+  const cont = (n,k) => mats.filter(l=>(credito(l)||"Sem vendedora")===n && matDate(l).slice(0,7)===k).length;
+  const max6 = Math.max(1, ...quem6.flatMap(n=>seis.map(k=>cont(n,k))));
+  const sel = rows.find(r=>r.n===matVend);
+  el.innerHTML = `<section class="panel">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><h3 class="sec" style="margin:0">Matrículas de ${esc(nomeMes(matMes))}</h3>
+        <label class="row" style="font-size:.9rem">Mês <select id="matMesSel">${lista.map(k=>`<option value="${k}"${k===matMes?" selected":""}>${esc(nomeMes(k))}</option>`).join("")}</select></label></div>
+      <p class="note">Equipe: <b>${T.tot}</b> matrícula(s) · <b style="color:var(--today)">🚩 ${T.rua} de ação de rua</b> (${pct(T.rua, T.tot)}) · meta somada ${T.meta} (${pct(T.tot, T.meta)})</p>
+      <div class="tblwrap"><table class="rank"><thead><tr><th>Vendedora</th><th>Matrículas</th><th>🚩 De rua</th><th>Outras origens</th><th>EAD</th><th>Semi</th><th>Meta</th><th>% da meta</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr${r.n===matVend?' class="eu"':""}><td><button type="button" class="btn ghost" data-matvend="${esc(r.n)}" style="padding:2px 8px">${esc(r.n)}</button></td><td><b>${r.tot}</b></td><td><b style="color:var(--today)">${r.rua}</b></td><td>${r.tot-r.rua}</td><td>${r.ls.filter(l=>l.modalidade==="EAD").length}</td><td>${r.ls.filter(l=>l.modalidade==="Semipresencial").length}</td><td>${r.meta||"–"}</td><td>${r.meta ? pct(r.tot, r.meta) : "–"}</td></tr>`).join("")}</tbody></table></div>
+      <p class="note">Clique no nome para ver os alunos. A matrícula conta no mês da data da matrícula, para quem fechou.</p>
+      ${sel ? `<div class="info"><b>Alunos de ${esc(sel.n)} em ${esc(nomeMes(matMes))} (${sel.tot})</b>${sel.ls.sort((a,b)=>matDate(a).localeCompare(matDate(b))).map(l=>`<span>${br(matDate(l))} · <button type="button" class="nome" data-matficha="${l.id}">${esc(nomeExib(l))}</button> · ${esc(l.curso||"sem curso")}${l.modalidade?` (${esc(l.modalidade)})`:""} · ${deRua(l) ? `<b style="color:var(--today)">🚩 rua${l.acaoRua?` (${esc(l.acaoRua)})`:""}</b>` : esc(l.origem||"origem não informada")}</span>`).join("") || "<span>Nenhuma.</span>"}</div>` : ""}
+    </section>
+    <section class="panel">
+      <h3 class="sec">Últimos 6 meses</h3>
+      <div class="tblwrap"><table class="rank"><thead><tr><th>Vendedora</th>${seis.map(k=>`<th>${esc(MESES[Number(k.slice(5,7))-1].slice(0,3))}/${k.slice(2,4)}</th>`).join("")}</tr></thead>
+        <tbody>${quem6.map(n=>`<tr><td>${esc(n)}</td>${seis.map(k=>{ const c = cont(n,k); return `<td><b>${c}</b><span class="mini"><i style="width:${Math.round(c*100/max6)}%"></i></span></td>`; }).join("")}</tr>`).join("")}
+        <tr><td><b>Equipe</b></td>${seis.map(k=>`<td><b>${mats.filter(l=>matDate(l).slice(0,7)===k).length}</b> <span class="note" style="margin:0">🚩${mats.filter(l=>matDate(l).slice(0,7)===k && deRua(l)).length}</span></td>`).join("")}</tr></tbody></table></div>
+    </section>`;
+}
+document.getElementById("matriculas").addEventListener("change", e=>{ if(e.target.id==="matMesSel"){ matMes = e.target.value; matVend = null; e.target.blur(); renderMatriculas(); } });
+document.getElementById("matriculas").addEventListener("click", e=>{
+  const v = e.target.closest("[data-matvend]"); if(v){ matVend = matVend===v.dataset.matvend ? null : v.dataset.matvend; renderMatriculas(); return; }
+  const f = e.target.closest("[data-matficha]"); if(f){ fichaId = f.dataset.matficha; render(); }
+});
+
 /* ---------- início / ranking ---------- */
 let rankPer = "mes", anoSel = new Date().getFullYear(), backupInfo = null;
 const RANK_PER = {hoje:"Hoje", semana:"Esta semana", mes:"Este mês"};
@@ -958,7 +1168,7 @@ function renderInicio(){
     for(const l of leads) for(const h of (l.historico||[])) if(h.por===n && inP(h.data)){ if(ATEND.test(h.acao)) atend++; if(/ficou com/.test(h.acao)) pegos++; }
     const mine_ = leads.filter(l=>l.responsavel===n), fechou = leads.filter(l=>l.etapa==="matriculado" && credito(l)===n);
     return {n, atend, pegos,
-      mats: fechou.filter(l=>inP(matDate(l))).length,
+      mats: fechou.filter(l=>inP(matDate(l))).length, rua: fechou.filter(l=>inP(matDate(l)) && deRua(l)).length,
       matsMes: fechou.filter(l=>matDate(l).slice(0,7)===mesKey()).length,
       meta: Number(mm[n]) || META_PADRAO,
       carteira: mine_.filter(l=>!["perdido","naoquer","matriculado"].includes(l.etapa)).length,
@@ -969,7 +1179,7 @@ function renderInicio(){
   const top = rows.slice(0,3);
   const precisaBackup = podeGerir() && backupInfo && backupInfo.ultimoMes !== mesKey() && leads.length;
   const naoLidos = recadosNaoLidos();
-  el.innerHTML = (naoLidos.length ? `<div class="warn" style="background:var(--calm-soft);color:var(--calm)"><span><b>${naoLidos.length} recado(s) novo(s) da Isabella:</b> ${esc(naoLidos[0].titulo || "")}</span><button class="btn primary" type="button" id="btnVerRec">Ler agora</button></div>` : "") + (precisaBackup ? `<div class="warn"><span><b>Backup de ${mesNome()}:</b> baixe a planilha com todos os leads e guarde no seu computador ou Drive.${backupInfo.ultimoEm ? ` Último backup em ${brAno(backupInfo.ultimoEm)}.` : ""}</span><button class="btn primary" type="button" id="btnBackup">Baixar backup agora</button></div>` : "") + `
+  el.innerHTML = quentesHTML(podeGerir() && resp==="todas" ? leads : mine(), t) + (naoLidos.length ? `<div class="warn" style="background:var(--calm-soft);color:var(--calm)"><span><b>${naoLidos.length} recado(s) novo(s) da Isabella:</b> ${esc(naoLidos[0].titulo || "")}</span><button class="btn primary" type="button" id="btnVerRec">Ler agora</button></div>` : "") + (precisaBackup ? `<div class="warn"><span><b>Backup de ${mesNome()}:</b> baixe a planilha com todos os leads e guarde no seu computador ou Drive.${backupInfo.ultimoEm ? ` Último backup em ${brAno(backupInfo.ultimoEm)}.` : ""}</span><button class="btn primary" type="button" id="btnBackup">Baixar backup agora</button></div>` : "") + `
     <div class="row" style="justify-content:space-between">
       <h3 class="sec">Ranking · ${RANK_PER[rankPer]}</h3>
       <div class="chips">${Object.entries(RANK_PER).map(([k,v])=>`<button type="button" class="chip" data-rper="${k}" aria-pressed="${k===rankPer}">${v}</button>`).join("")}</div>
@@ -979,19 +1189,19 @@ function renderInicio(){
       <div class="pcard p${i+1}">
         <span class="pos">${i+1}º lugar</span>
         <span class="pill owner" style="--c:var(--p${ownerColor(r.n)});align-self:flex-start">${esc(r.n)}</span>
-        <span class="big">${r.mats}</span><span class="lbl">matrícula(s)</span>
+        <span class="big">${r.mats}</span><span class="lbl">matrícula(s) · <b style="color:var(--today)">🚩 ${r.rua} de rua</b></span>
         <span class="lbl">${r.atend} atendimento(s) · ${r.pegos} lead(s) conquistado(s)</span>
       </div>`).join("")}</div>
     <section class="panel">
       <div class="tblwrap"><table class="rank">
-        <thead><tr><th>#</th><th>Vendedora</th><th>Matrículas</th><th>Atendimentos</th><th>Leads conquistados</th><th>Meta do mês</th><th>Carteira ativa</th><th>Atrasados</th></tr></thead>
+        <thead><tr><th>#</th><th>Vendedora</th><th>Matrículas</th><th>🚩 De rua</th><th>Atendimentos</th><th>Leads conquistados</th><th>Meta do mês</th><th>Carteira ativa</th><th>Atrasados</th></tr></thead>
         <tbody>${rows.map((r,i)=>`<tr class="${r.n===eu?"eu":""}"><td>${i+1}º</td><td><span class="pill owner" style="--c:var(--p${ownerColor(r.n)})">${esc(r.n)}</span></td>
-          <td><button type="button" class="btn ghost" data-rkmat="${esc(r.n)}" title="Ver quais matrículas contaram" style="padding:2px 8px"><b>${r.mats}</b></button></td><td>${r.atend}</td><td>${r.pegos}</td>
+          <td><button type="button" class="btn ghost" data-rkmat="${esc(r.n)}" title="Ver quais matrículas contaram" style="padding:2px 8px"><b>${r.mats}</b></button></td><td><b style="color:var(--today)">${r.rua}</b></td><td>${r.atend}</td><td>${r.pegos}</td>
           <td>${r.matsMes}/${r.meta}<span class="mini"><i style="width:${Math.min(100,Math.round(r.matsMes*100/r.meta))}%"></i></span></td>
           <td>${r.carteira}</td><td>${r.atras ? `<span style="color:var(--late);font-weight:600">${r.atras}</span>` : "0"}</td></tr>`).join("")}</tbody>
       </table></div>
       ${rankVer ? (()=>{ const ls = leads.filter(l=>l.etapa==="matriculado" && credito(l)===rankVer && inP(matDate(l))).sort((a,b)=>matDate(b).localeCompare(matDate(a)));
-        return `<div class="info" style="margin-top:8px"><b>Matrículas de ${esc(rankVer)} no período (${ls.length})</b>${ls.map(l=>`<span>${br(matDate(l))} · <button type="button" class="nome" data-fichaini="${l.id}">${esc(nomeExib(l))}</button> · ${esc(l.curso||"")}${l.responsavel && l.responsavel!==rankVer ? ` · hoje com ${esc(l.responsavel)}` : ""}</span>`).join("") || "<span>Nenhuma.</span>"}</div>`; })() : ""}
+        return `<div class="info" style="margin-top:8px"><b>Matrículas de ${esc(rankVer)} no período (${ls.length})</b>${ls.map(l=>`<span>${br(matDate(l))} · <button type="button" class="nome" data-fichaini="${l.id}">${esc(nomeExib(l))}</button> · ${esc(l.curso||"")}${deRua(l) ? ` · <b style="color:var(--today)">🚩 rua${l.acaoRua?` (${esc(l.acaoRua)})`:""}</b>` : ""}${l.responsavel && l.responsavel!==rankVer ? ` · hoje com ${esc(l.responsavel)}` : ""}</span>`).join("") || "<span>Nenhuma.</span>"}</div>`; })() : ""}
       <p class="note">Clique no número de matrículas para ver quais contaram. Ordem: matrículas no período; empate decide por atendimentos. Atendimentos são mensagens marcadas como enviadas e respostas registradas no sistema. Leads conquistados são os que ela pegou na aba Sem vendedora.</p>
     </section>
     ${podeGerir() ? semanaHTML() + carteiraHTML() : ""}
@@ -1126,9 +1336,9 @@ function guiaHTML(){
   return `<details class="panel"><summary style="cursor:pointer;font-weight:600">Como marcar cada situação</summary>
     <ul style="margin:.4rem 0 0;padding-left:1.1rem;line-height:1.6;font-size:.9rem">
       ${it("Ainda não respondeu","ninguém conseguiu conversar ainda. Cada vendedora manda 3 mensagens, com intervalos cada vez maiores (1ª vendedora: hoje, +4 dias, +7 dias). Sem resposta, o lead passa sozinho para outra vendedora, que se apresenta e manda mais 3 (intervalos de 7 e 14 dias); depois para uma terceira (14 e 30 dias). Se ninguém conseguir resposta, vai para a Lista fria e passa a receber só ofertas.")}
-      ${it("Em atendimento","o lead respondeu. Clique em <b>Respondeu</b> e, depois disso, em <b>Registrar conversa</b> sempre que falar com ele.")}
+      ${it("Em atendimento","o lead respondeu. Clique em <b>Respondeu</b> e, sempre que falar com ele, em <b>Registrar conversa</b>: toque no que aconteceu, escolha a temperatura (🔥 quente volta amanhã, morno em 2 dias, ❄️ frio em 5) e escreva o próximo passo. Sem resposta depois disso: tenta de novo em 2 dias, depois 4, depois de 15 em 15.")}
       ${it("Pediu para chamar depois","o lead pediu para ser chamado numa data (ex.: \"me chama em janeiro\"). Some das listas e volta sozinho nesse dia.")}
-      ${it("Matriculado","fechou. A vendedora manda só uma mensagem, 7 dias depois do início das aulas; o resto é com a Permanência.")}
+      ${it("Matriculado","fechou. Informe de onde veio a matrícula (🚩 Ação de rua conta em destaque e vale comissão em dobro). A vendedora manda 2 mensagens: 7 dias depois do início das aulas e, aos 30 dias, o pedido de indicação; o resto é com a Permanência.")}
       ${it("Lista fria","parou de responder ou disse que não vai fazer agora. Sai da rotina diária e fica guardado para novas ofertas na aba Lista fria.")}
       ${it("Pediu para não ser chamado","pediu para não receber mais mensagens. Nunca mais entra em lista nem oferta.")}
     </ul>
@@ -1214,7 +1424,23 @@ function renderNumeros(){
       ${parados.length>40?`<p class="note">…e mais ${parados.length-40}.</p>`:""}` : `<p class="note">Nenhum lead parado. Ótimo sinal.</p>`}
       <p class="note">Leads em "Ainda não respondeu" ou "Em atendimento", com vendedora, sem nenhuma ação há 15 dias ou mais. Só você vê.</p>
     </section>`;
-  el.innerHTML = anual + paradosHTML + `
+  const msgsHTML = !podeGerir() ? "" : (()=>{
+    const nomeK = {}; for(const g of TPL_GROUPS) for(const [k,lbl] of g.keys) nomeK[k] = lbl;
+    const agg = {};
+    for(const l of [...leads, ...lixeira]) for(const e of (l.envios||[])){ if(!e || !e.k) continue; const key = e.k+"|"+(e.v||0);
+      const x = agg[key] = agg[key] || {k:e.k, v:e.v||0, env:0, resp:0}; x.env++; if(e.r) x.resp++; }
+    const rows = Object.values(agg).filter(x=>x.env>=5).map(x=>({...x, taxa: x.resp/x.env})).sort((a,b)=>b.taxa-a.taxa || b.env-a.env);
+    const trecho = x => { if(x.k.startsWith("camp:")) return `Campanha "${x.k.slice(5)}" · versão ${x.v+1}`;
+      const p = String(tpl[x.k]||"").split(/\n\s*---\s*\n/).map(t=>t.trim()).filter(Boolean)[x.v] || "";
+      return `${nomeK[x.k] || x.k} · versão ${x.v+1}: "${p.slice(0,90)}${p.length>90?"…":""}"`; };
+    const linha = x => `<tr><td style="text-align:left;white-space:normal">${esc(trecho(x))}</td><td>${x.env}</td><td>${x.resp}</td><td><b>${Math.round(x.taxa*100)}%</b></td></tr>`;
+    return `<section class="panel"><h3 class="sec">Mensagens que funcionam</h3>
+      <p class="tplhelp">Quantas vezes cada mensagem pronta foi enviada e quantas tiveram resposta (a pessoa respondeu em até 30 dias). Só aparecem mensagens com 5 envios ou mais. Troque as que respondem pouco em Configurações → Mensagens.</p>
+      ${rows.length ? `<div class="tblwrap"><table class="rank"><thead><tr><th style="text-align:left">Mensagem</th><th>Enviadas</th><th>Responderam</th><th>Taxa</th></tr></thead><tbody>
+        ${rows.slice(0,8).map(linha).join("")}${rows.length>8 ? `<tr><td colspan="4" class="note" style="text-align:left">Piores:</td></tr>` + rows.slice(-Math.min(5, rows.length-8)).map(linha).join("") : ""}</tbody></table></div>`
+        : `<p class="note">Ainda juntando dados: a contagem começa a partir desta versão do sistema.</p>`}
+    </section>`; })();
+  el.innerHTML = anual + msgsHTML + paradosHTML + `
     <div class="row"><label class="f" style="flex-direction:row;align-items:center;gap:8px">Período
       <select id="periodo" style="width:auto">
         <option value="mes"${periodo==="mes"?" selected":""}>Este mês</option>
@@ -1530,7 +1756,7 @@ document.getElementById("config").addEventListener("click", async e=>{
 });
 
 /* ---------- campanhas ---------- */
-let campNome = "", campMsg = CAMP_DEFAULT, campDias = "tudo";
+let campNome = "", campMsg = CAMP_DEFAULT, campDias = "tudo", campLimite = 60;
 try{ campMsg = localStorage.getItem("campMsg") || CAMP_DEFAULT; campNome = localStorage.getItem("campNome") || ""; }catch(e){}
 function renderCampControls(){
   document.getElementById("campSit").innerHTML = "";
@@ -1540,14 +1766,15 @@ function renderCampControls(){
 const campLabel = () => campNome.trim() || `Campanha ${br(today())}`;
 function campLista(){
   const lim = campDias==="tudo" ? null : addDays(today(), -Number(campDias));
-  return mine().filter(l => (l.etapa==="frio" || l.etapa==="perdido") &&
-    (!lim || String(l.perdidoEm || l.criadoEm || "").slice(0,10)>=lim) && (campMot.size===0 || campMot.has(l.motivoPerda || "Parou de responder")))
-    .sort((a,b)=>String(a.nome).localeCompare(b.nome));
+  const fria = campPub==="fria";
+  return mine().filter(l => campPubOk(l) &&
+    (!fria || !lim || String(l.perdidoEm || l.criadoEm || "").slice(0,10)>=lim) && (!fria || campMot.size===0 || campMot.has(l.motivoPerda || "Parou de responder")))
+    .sort((a,b)=>(campFeita(a)?1:0)-(campFeita(b)?1:0) || String(a.nome).localeCompare(b.nome));
 }
 const campFeita = l => (l.campanhas||[]).some(c=>c.nome===campLabel());
-function campText(l){ return trocaNome(variacao(campMsg, l), l.nome).replaceAll("{curso}", l.curso || "graduação").replaceAll("{responsavel}", l.responsavel || "equipe"); }
+function campText(l){ return trocaNome(variacao(campMsg, l), l.nome).replaceAll("{ofertaBF}", ofertaBF(l.curso, l.modalidade)).replaceAll("{curso}", l.curso || "graduação").replaceAll("{responsavel}", firstName(l.responsavel || meuNome()) || "equipe"); }
 function renderCampList(){
-  const ls = campLista(); const feitas = ls.filter(campFeita).length;
+  const ls0 = campLista(); const feitas = ls0.filter(campFeita).length; const ls = ls0.slice(0, campLimite);
   document.getElementById("campResumo").textContent = ls.length ? `${ls.length} lead(s) na lista · ${feitas} já receberam "${campLabel()}"` : "";
   document.getElementById("campList").innerHTML = !db ? emptyHTML("Conectando…","") : ls.length ? ls.map(l=>{ const f = campFeita(l); return `
     <div class="crow${f?" sent":""}" data-id="${esc(l.id)}">
@@ -1558,25 +1785,34 @@ function renderCampList(){
         ${f?"":`<button class="btn" type="button" data-cact="enviada">Marcar enviada</button>`}
         <button class="btn" type="button" data-cact="respondeu">Respondeu</button>`}
       </div></div>`; }).join("")
-    : emptyHTML("Lista fria vazia nesse filtro","Leads vão para cá quando param de responder (3 tentativas) ou quando alguém marca <b>Lista fria</b>.");
+    : emptyHTML("Ninguém nesse filtro","Troque o público da campanha lá em cima.");
+  if(ls0.length > ls.length) document.getElementById("campList").innerHTML += `<button class="btn" type="button" id="campMais">Mostrar mais (${ls0.length-ls.length} restantes)</button>`;
 }
 document.getElementById("campanha").addEventListener("click", async e=>{
   const wa2 = e.target.closest("a.btn.primary");
   if(wa2 && foraDeHorario()){ const k = "camp"+(e.target.closest(".crow")||{dataset:{}}).dataset.id; if(!(avisoHorario[k] && Date.now()-avisoHorario[k] < 15000)){ e.preventDefault(); avisoHorario[k] = Date.now(); toast(`Agora são ${new Date().getHours()}h. O ideal é chamar entre 8h e 21h. Toque de novo para enviar mesmo assim.`); return; } }
+  if(e.target.id==="campMais"){ campLimite += 60; renderCampList(); return; }
+  if(e.target.id==="campBF"){ campNome = "Black Friday 2026"; campMsg = BF_MSG; campPub = "base"; campLimite = 60;
+    try{ localStorage.setItem("campNome", campNome); localStorage.setItem("campMsg", campMsg); localStorage.setItem("campPub", campPub); }catch(err){}
+    document.getElementById("campNome").value = campNome; document.getElementById("campMsg").value = campMsg; document.getElementById("campPub").value = campPub;
+    document.getElementById("campFriaFiltros").hidden = true; renderCampList(); toast("Campanha Black Friday pronta: toda a base que ainda não matriculou"); return; }
   const sit = e.target.closest("[data-sit]"), mot = e.target.closest("[data-mot]");
   if(sit){ const k = sit.dataset.sit; campSit.has(k) ? campSit.delete(k) : campSit.add(k); renderCampControls(); renderCampList(); return; }
   if(mot){ const m = mot.dataset.mot; if(!m) campMot.clear(); else campMot.has(m) ? campMot.delete(m) : campMot.add(m); renderCampControls(); renderCampList(); return; }
   const row = e.target.closest(".crow"); const act = e.target.dataset.cact; if(!row || !act) return;
   const l = leads.find(x=>x.id===row.dataset.id); if(!l) return;
   if(act==="enviada"){ const c = [...(l.campanhas||[]), {nome:campLabel(), data:today()}].slice(-10);
-    if(await patch(l.id, {campanhas:c}, `campanha enviada: ${campLabel()}`)) toast("Marcado como enviado"); }
-  if(act==="respondeu"){ if(await patch(l.id, {etapa:"negociando", tentativas:0, proximo:addDays(today(),3)}, `respondeu à oferta ${campLabel()} → Em atendimento`)) toast("Voltou para Em atendimento, contato em 3 dias"); }
+    if(await patch(l.id, {campanhas:c, envios: comEnvio(l, envioDe("camp:"+campLabel(), campMsg, l))}, `campanha enviada: ${campLabel()}`)) toast("Marcado como enviado"); }
+  if(act==="respondeu"){ if(await patch(l.id, {...respostaFields(l), etapa:"negociando", tentativas:0, proximo:addDays(today(),1), temperatura:"quente"}, `respondeu à oferta ${campLabel()} → Em atendimento`)) toast("Foi para Em atendimento (🔥 quente), contato amanhã. Registre a conversa no card."); }
 });
 document.getElementById("campanha").addEventListener("input", e=>{
   if(e.target.id==="campNome"){ campNome = e.target.value; try{ localStorage.setItem("campNome", campNome); }catch(err){} renderCampList(); }
   if(e.target.id==="campMsg"){ campMsg = e.target.value; try{ localStorage.setItem("campMsg", campMsg); }catch(err){} renderCampList(); }
 });
 document.getElementById("campDias").addEventListener("change", e=>{ campDias = e.target.value; renderCampList(); });
+document.getElementById("campPub").innerHTML = CAMP_PUBS.map(([k,t])=>`<option value="${k}"${k===campPub?" selected":""}>${esc(t)}</option>`).join("");
+document.getElementById("campFriaFiltros").hidden = campPub!=="fria";
+document.getElementById("campPub").addEventListener("change", e=>{ campPub = e.target.value; campLimite = 60; try{ localStorage.setItem("campPub", campPub); }catch(err){} document.getElementById("campFriaFiltros").hidden = campPub!=="fria"; renderCampList(); });
 document.getElementById("campNome").value = campNome; document.getElementById("campMsg").value = campMsg;
 renderCampControls();
 
@@ -1585,6 +1821,15 @@ const SITE = typeof FIREBASE_CONFIG !== "undefined";
 let membros = [], userEmail = "", saindo = null, renomeando = null;
 let poolVista = "", poolFuturos = false, mostrarOcup = false, distAberto = false, distRodando = false, patchExtra = {};
 let atrasoAberto = false, atrasoRodando = false, juntandoNome = false, faltaAberta = false, faltaQuem = "";
+// Leads quentes parados: estão perto de fechar e passaram do dia combinado.
+const quenteParado = (l, t) => l.temperatura==="quente" && ["negociando","informado"].includes(l.etapa) && l.proximo && l.proximo < t;
+function quentesHTML(L, t){
+  const q = L.filter(l=>quenteParado(l, t)); if(!q.length) return "";
+  const g = {}; for(const l of q){ const n = donaDe(l) || "Sem vendedora"; (g[n] = g[n] || []).push(l); }
+  const adm = podeGerir() && resp==="todas";
+  return `<div class="warn" style="flex-direction:column;align-items:flex-start;gap:4px"><span><b>🔥 ${q.length} lead(s) quente(s) parado(s)</b> · passaram do dia combinado e estão perto de fechar. Eles estão no topo da fila.</span>
+    ${adm ? Object.entries(g).sort((a,b)=>b[1].length-a[1].length).map(([n,ls])=>`<span><b>${esc(n)}:</b> ${ls.slice(0,6).map(l=>`${esc(nomeExib(l))} (${-diff(l.proximo,t)} dia${-diff(l.proximo,t)>1?"s":""})`).join(", ")}${ls.length>6?` e mais ${ls.length-6}`:""}</span>`).join("") : ""}</div>`;
+}
 // Cobrir falta: a administradora passa os contatos de hoje (e atrasados) de quem faltou para outras vendedoras.
 function faltaHTML(L, t){
   if(!podeGerir() || resp!=="todas") return "";
@@ -1689,7 +1934,8 @@ function renderEquipe(force){
   if(!force && el.contains(document.activeElement) && document.activeElement.tagName!=="BUTTON") return;
   const m = membrosAtuais(); const ativos = m.filter(x=>x.ativa!==false), inativos = m.filter(x=>x.ativa===false);
   const mm = metas[mesKey()] || {}; const gerir = podeGerir();
-  const mats = n => leads.filter(l=>l.etapa==="matriculado" && credito(l)===n && matDate(l).slice(0,7)===mesKey()).length;
+  const matsL = n => leads.filter(l=>l.etapa==="matriculado" && credito(l)===n && matDate(l).slice(0,7)===mesKey());
+  const mats = n => matsL(n).length, matsRua = n => matsL(n).filter(deRua).length;
   el.innerHTML = `
     ${gerir ? `<form class="panel" id="formVend">
       <h3 class="sec">Adicionar vendedora</h3>
@@ -1705,7 +1951,7 @@ function renderEquipe(force){
     <section class="panel">
       <h3 class="sec">Ativas · ${ativos.length}</h3>
       <div class="tblwrap"><table><thead><tr><th>Pessoa</th>${SITE ? "<th>E-mail</th>" : ""}<th>Em aberto</th><th>Matrículas no mês</th><th>Meta</th>${gerir ? "<th></th>" : ""}</tr></thead><tbody>
-      ${ativos.map(x=>`<tr><td><span class="pill owner" style="--c:var(--p${ownerColor(x.nome)})">${esc(x.nome)}</span>${x.papel==="permanencia" ? ` <span class="pill muted">Permanência</span>` : ""}</td>${SITE ? `<td>${esc(x.email||"—")}</td>` : ""}${x.papel==="permanencia" ? `<td>–</td><td>–</td><td>–</td>` : `<td>${emAberto(x.nome).length}</td><td>${mats(x.nome)}</td><td>${Number(mm[x.nome]) || META_PADRAO}</td>`}${gerir ? `<td style="white-space:nowrap"><button class="btn ghost" type="button" data-ren="${esc(x.nome)}">Renomear</button> <button class="btn ghost danger" type="button" data-sair="${esc(x.nome)}">Desativar</button></td>` : ""}</tr>`).join("")}
+      ${ativos.map(x=>`<tr><td><span class="pill owner" style="--c:var(--p${ownerColor(x.nome)})">${esc(x.nome)}</span>${x.papel==="permanencia" ? ` <span class="pill muted">Permanência</span>` : ""}</td>${SITE ? `<td>${esc(x.email||"—")}</td>` : ""}${x.papel==="permanencia" ? `<td>–</td><td>–</td><td>–</td>` : `<td>${emAberto(x.nome).length}</td><td>${mats(x.nome)}${matsRua(x.nome) ? ` <span style="color:var(--today)">(🚩 ${matsRua(x.nome)})</span>` : ""}</td><td>${Number(mm[x.nome]) || META_PADRAO}</td>`}${gerir ? `<td style="white-space:nowrap"><button class="btn ghost" type="button" data-ren="${esc(x.nome)}">Renomear</button> <button class="btn ghost danger" type="button" data-sair="${esc(x.nome)}">Desativar</button></td>` : ""}</tr>`).join("")}
       </tbody></table></div>
       ${saindo ? boxSaida() : ""}
       ${renomeando ? `<div class="stagebox"><b>Renomear ${esc(renomeando)}</b>
@@ -1854,8 +2100,21 @@ async function enviarRodizio(l, t){
   await patch(l.id, {...p.d, ultimoEnvio:t}, `mensagem enviada (${MAX_TENT} de ${MAX_TENT}) · ${p.h}`, p.d.proximo ? {espalhar:true} : undefined);
   toast(p.msg);
 }
+// Mensagens que funcionam: guarda qual modelo/variação foi enviado e se a pessoa respondeu depois.
+function envioDe(k, texto, l){
+  if(!k) return null; const partes = String(texto||"").split(/\n\s*---\s*\n/).map(x=>x.trim()).filter(Boolean);
+  const esc0 = variacao(texto||"", l, k); const v = Math.max(0, partes.indexOf(esc0)); return {k, v, d: today()};
+}
+function comEnvio(l, e){ return e ? [...(l.envios||[]), e].slice(-8) : (l.envios||[]); }
+function respostaFields(l){
+  const ev = (l.envios||[]).slice(); const i = ev.length-1;
+  if(i<0 || ev[i].r || diff(today(), ev[i].d) > 30) return {};
+  ev[i] = {...ev[i], r: today()}; return {envios: ev};
+}
 async function marcarEnviado(l){
   patchExtra = isPool(l) ? {chamandoPor: meuNome() || userEmail, chamandoEm: today()} : {};
+  const txt = (document.getElementById(`msg-${l.id}`)||{}).value; if(txt) patchExtra.ultimaMsg = {texto: String(txt).slice(0,600), data: today(), por: meuNome() || userEmail};
+  { const k = tplKey(l); const e = k ? envioDe(k, tpl[k], l) : null; if(e) patchExtra.envios = comEnvio(l, e); }
   try{ await marcarEnviado_(l); } finally { patchExtra = {}; }
 }
 async function marcarEnviado_(l){
@@ -1863,8 +2122,9 @@ async function marcarEnviado_(l){
   if(l.etapa==="matriculado"){
     const feitos = [...(l.posFeitos||[])]; if(l.posAtual && !feitos.includes(l.posAtual)) feitos.push(l.posAtual);
     const nx = nextPos({...l, posFeitos:feitos});
-    await patch(l.id, {posFeitos:feitos, posAtual:nx.key, proximo:nx.date, ultimoEnvio:t}, "pós-matrícula: mensagem de 7 dias enviada");
-    toast("Enviado. Daqui em diante, o acompanhamento é da Permanência");
+    const qual = (POS.find(p=>p.k===l.posAtual)||{label:"pós-matrícula"}).label;
+    await patch(l.id, {posFeitos:feitos, posAtual:nx.key, proximo:nx.date, ultimoEnvio:t}, `pós-matrícula: ${qual.toLowerCase()} enviado`);
+    toast(nx.key ? `Enviado. Próximo: ${(POS.find(p=>p.k===nx.key)||{}).label} em ${brAno(nx.date)}` : "Enviado. Daqui em diante, o acompanhamento é da Permanência");
     return;
   }
   if(l.etapa==="semmedio"){
@@ -1896,7 +2156,7 @@ async function marcarEnviado_(l){
       await patch(l.id, d, `5 meses sem resposta com ${atual||"a equipe"} → passado para ${outra||"—"} com mensagem de apresentação`, {espalhar:true});
       toast(`5 meses sem resposta. Lead passado para ${outra}, que vai se apresentar amanhã`); return;
     }
-    const prox = n < MAX_TENT ? RETRY_DIAS : LONGO_DIAS;
+    const prox = n < MAX_TENT ? (n===1 ? RETRY_DIAS : 4) : LONGO_DIAS;   // quem já conversou: 2 dias, depois 4, depois de 15 em 15
     await patch(l.id, {tentativas:n, proximo:addDays(t,prox), ultimoEnvio:t, ...(l.cicloInicio ? {} : {cicloInicio:ini, ciclos})},
       n <= MAX_TENT ? `mensagem enviada (tentativa ${n} de ${MAX_TENT})` : `mensagem enviada (tentativa ${n}, de 15 em 15 dias)`, {espalhar:true});
     toast(`Enviado. Se não responder, volta em ${prox} dias`);
@@ -1994,7 +2254,7 @@ list.addEventListener("click", async e=>{
   const act = e.target.dataset.act;
   if(act==="enviado"){ drafts.delete(id); await marcarEnviado(l); }
   if(act==="respondeu"){
-    if(l.etapa==="matriculado"){ await patch(id, {posSemResposta:0, risco:false, riscoAvisado:null}, "aluno respondeu"); toast("Resposta registrada"); }
+    if(l.etapa==="matriculado"){ await patch(id, {posSemResposta:0, risco:false, riscoAvisado:null, ...respostaFields(l)}, "aluno respondeu"); toast("Resposta registrada"); }
     else { pendingStage.set(id, "negociando"); render(); }
     return;
   }
@@ -2020,12 +2280,13 @@ list.addEventListener("click", async e=>{
     if(x.err){ toast(x.err); return; }
     drafts.delete(id);
     if(pendingCtxOnly.has(id)){
-      if(await patch(id, {objecao:x.objecao, resumo:x.resumo, resumoEm:today(), resumoPor:meuNome()||userEmail, proximo:addDays(today(), x.prox!=null ? x.prox : 3)}, `${objLabel(x.objecao)}${x.resumo ? ` · "${x.resumo}"` : ""}`)){ pendingCtxOnly.delete(id); pendingStage.delete(id); toast("Contexto atualizado. A mensagem pronta já usa ele"); render(); }
+      if(await patch(id, {...respostaFields(l), objecao:x.objecao, resumo:x.resumo, resumoEm:today(), resumoPor:meuNome()||userEmail, proximo:addDays(today(), x.prox!=null ? x.prox : 2), temperatura:x.temp||null, proxPasso:x.passo||"", acoes:x.acoes||[], tentativas:0}, stageHist("negociando", x).replace(/^Em conversa · /,""))){ pendingCtxOnly.delete(id); pendingStage.delete(id); toast("Contexto atualizado. A mensagem pronta já usa ele"); render(); }
       return;
     }
     let d = stageData(l, st, x), h = stageHist(st, x);
+    if(st==="negociando") d = {...respostaFields(l), ...d};
     if(pendingPegar.has(id)){ const nome = meuNome(); d = {...d, responsavel:nome, filaDe:null, chamandoPor:null, chamandoEm:null}; h = `respondeu → ficou com ${nome} · ${h}`; }
-    if(await patch(id, d, h)){ const pg = pendingPegar.has(id); pendingStage.delete(id); pendingPegar.delete(id); toast(pg ? `Lead agora é seu, ${firstName(meuNome())}. Próximo contato em 3 dias` : `${STAGES[st].label}: salvo`); render(); }
+    if(await patch(id, d, h)){ const pg = pendingPegar.has(id); pendingStage.delete(id); pendingPegar.delete(id); toast(pg ? `Lead agora é seu, ${firstName(meuNome())}. Próximo contato em ${brAno(ultimoPatch.proximo||d.proximo||today())}` : `${STAGES[st].label}: salvo`); render(); }
   }
   if(act==="salvaBol"){ const b = (document.getElementById(`qb-${id}`)||{}).value || "";
     if(!b){ toast("Escolha a data do 1º boleto"); return; }
@@ -2039,7 +2300,10 @@ list.addEventListener("click", async e=>{
     if(phoneDigits(tel).length < 12){ toast("Confira o WhatsApp: informe DDD + número"); return; }
     const dp = findDup(tel, id); if(dp){ toast(dupTxt(dp)); return; }
     const ind = g("ind").value.trim();
-    const d = {nome, telefone:tel, curso:lerCurso(`ed-curso-${id}`), origem: ind && !g("origem").value ? "Indicação" : g("origem").value, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind), antigo: g("antigo") ? g("antigo").checked : !!l.antigo};
+    const ori0 = ind && !g("origem").value ? "Indicação" : g("origem").value, acao0 = g("acao") ? g("acao").value.trim() : "";
+    if(ori0===RUA && acao0.length < 2){ toast("Escreva a empresa ou o local da ação de rua"); return; }
+    if(l.etapa==="matriculado" && !ori0){ toast("Aluno matriculado precisa ter a origem"); return; }
+    const d = {modalidade: g("mod") ? (g("mod").value || null) : (l.modalidade||null), acaoRua: ori0===RUA ? acao0 : null, nome, telefone:tel, curso:lerCurso(`ed-curso-${id}`), origem: ori0, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind), antigo: g("antigo") ? g("antigo").checked : !!l.antigo};
     if(g("bol")){ const b = g("bol").value;
       if(!b){ toast("Informe a data do 1º boleto"); return; }
       if(l.dataMatricula && b < l.dataMatricula){ toast("O 1º boleto não pode vencer antes da matrícula"); return; }
@@ -2156,6 +2420,7 @@ function syncExtras(){
   box.innerHTML = needsExtras(st) ? extrasFields(st, "f-", null) : `<label class="f">Próximo contato<input type="date" id="fData" value="${addDays(today(), STAGES[st].dias)}"></label>`;
 }
 fEtapa.addEventListener("change", syncExtras);
+document.getElementById("fOrigem").addEventListener("change", e=>{ document.getElementById("fAcaoBox").hidden = e.target.value!==RUA; });
 document.getElementById("fInd").addEventListener("input", e=>{ if(e.target.value.trim()) document.getElementById("fOrigem").value = "Indicação"; });
 document.getElementById("fTel").addEventListener("input", e=>{ dupOk = false; const w = document.getElementById("dupWarn"); const dp = findDup(e.target.value);
   if(dp){ w.hidden = false; w.innerHTML = `<span>${esc(dupTxt(dp))}</span>`; } else w.hidden = true; });
@@ -2172,7 +2437,10 @@ form.addEventListener("submit", async e=>{
   if(dp && !dupOk){ const w = document.getElementById("dupWarn"); w.hidden = false;
     w.innerHTML = `<span>${esc(dupTxt(dp))}</span><button class="btn" type="button" id="dupSave">Salvar mesmo assim</button>`; return; }
   const st = fEtapa.value; const x = readExtras(st, "f-"); if(x.err){ toast(x.err); return; }
-  const base = {
+  const acaoRua = origem===RUA ? document.getElementById("fAcao").value.trim() : "";
+  if(origem===RUA && acaoRua.length < 2){ toast("Escreva a empresa ou o local da ação de rua"); return; }
+  if(st==="matriculado" && !origem){ toast("Escolha a origem da matrícula (ex.: Ação de rua, Instagram)"); return; }
+  const base = {acaoRua: acaoRua || null, modalidade: document.getElementById("fMod").value || null,
     nome: document.getElementById("fNome").value.trim(), telefone: tel,
     curso: lerCurso("fCurso"), responsavel: document.getElementById("fResp").value,
     origem, obs: document.getElementById("fObs").value.trim(), criadoEm: new Date().toISOString(), ultimoEnvio: null,
@@ -2184,7 +2452,7 @@ form.addEventListener("submit", async e=>{
     if(fd && fd.value) d.proximo = fd.value;
     else if(st!=="agendado" && d.proximo) d.proximo = st==="novo" ? diaLivre(base.responsavel, d.proximo) : semDomingo(d.proximo); }
   const lead = {...base, ...d, historico:[{data: today(), acao: `cadastrado · ${stageHist(st, x)}`}]};
-  try{ await db.collection("leads").add(lead); form.reset(); form.hidden = true; dupOk = false; document.getElementById("dupWarn").hidden = true; toast(`${firstName(lead.nome) || "Lead"} cadastrado`); }
+  try{ await db.collection("leads").add(lead); form.reset(); document.getElementById("fAcaoBox").hidden = true; form.hidden = true; dupOk = false; document.getElementById("dupWarn").hidden = true; toast(`${firstName(lead.nome) || "Lead"} cadastrado`); }
   catch(err){ toast(err.code==="permission-denied" ? "Seu e-mail não tem permissão para salvar. Fale com a Isabella." : err.code==="resource-exhausted" ? "Limite diário do plano gratuito atingido. Tente amanhã." : "Não salvou. Tente de novo."); }
 });
 
@@ -2237,6 +2505,8 @@ async function migrarFluxo(){
     if(!d.voltouCadencia && (l.etapa==="frio" || l.etapa==="perdido") && (l.proximo || !l.motivoPerda)){ d.proximo = null; if(!l.motivoPerda) d.motivoPerda = "Parou de responder"; if(!l.perdidoEm) d.perdidoEm = today(); }
     if(l.risco && !l.riscoRevisado && !(l.historico||[]).some(h=>/marcado em risco para a Permanência/.test(h.acao||""))){
       Object.assign(d, {risco:false, riscoAvisado:null, posSemResposta:0, riscoRevisado:true}); }
+    if(l.etapa==="matriculado" && !l.posAtual && (l.posFeitos||[]).includes("pos_d7") && !(l.posFeitos||[]).includes("pos_indic")){
+      const di = posDate(l, "pos_indic"); if(di && di >= addDays(today(), -7)){ d.posAtual = "pos_indic"; d.proximo = maxDate(di, today()); } }
     if(l.etapa==="matriculado" && l.posAtual && !keys.includes(l.posAtual)){
       const feitos = (l.posFeitos||[]).filter(k=>keys.includes(k));
       const nx = nextPos({...l, posFeitos:feitos}); d.posAtual = nx.key; d.proximo = nx.date;
@@ -2282,9 +2552,10 @@ auth.onAuthStateChanged(u=>{
   document.getElementById("banner").hidden = true;
   db = fs;
   const onErr = e => { if(e.code==="permission-denied") semAcesso(); else toast("Conexão perdida. Recarregue a página."); };
-  unsubs.push(db.collection("leads").onSnapshot(s=>{ const todos = s.docs.map(x=>({id:x.id, ...x.data()})); leads = todos.filter(l=>!l.excluido); lixeira = todos.filter(l=>l.excluido); atualizarAlunosList(); renderSnap(); migrarFluxo(); if(tab==="campanhas") renderCampList(); }, onErr));
+  unsubs.push(db.collection("leads").onSnapshot(s=>{ const todos = s.docs.map(x=>({id:x.id, ...x.data()})); leads = todos.filter(l=>!l.excluido); lixeira = todos.filter(l=>l.excluido); atualizarAlunosList(); atualizarLocais(); renderSnap(); migrarFluxo(); if(tab==="campanhas") renderCampList(); }, onErr));
   unsubs.push(db.doc("config/mensagens").onSnapshot(s=>{ const sv = s.exists ? s.data() : {}; tpl = {...DEFAULT_TPL, ...sv};
     for(const [k,v] of Object.entries(TPL_ANTIGOS)) if([].concat(v).includes(sv[k])) tpl[k] = DEFAULT_TPL[k]; renderSnap(); }, ()=>{}));
+  unsubs.push(db.collection("acoes").onSnapshot(s=>{ acoes = s.docs.map(x=>({id:x.id, ...x.data()})); atualizarLocais(); renderSnap(); }, ()=>{}));
   unsubs.push(db.collection("bloqueados").onSnapshot(s=>{ bloqueados = new Set(s.docs.map(x=>x.id)); }, ()=>{}));
   unsubs.push(db.doc("config/backup").onSnapshot(s=>{ backupInfo = s.exists ? s.data() : {}; renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/cursos").onSnapshot(s=>{ const l = s.exists && s.data().lista; CURSOS = Array.isArray(l) && l.length ? l : CURSOS_PADRAO.slice(); renderSnap(); }, ()=>{}));
@@ -2334,6 +2605,15 @@ document.getElementById("lReset").addEventListener("click", async ()=>{
   catch(err){ loginMsg("Não foi possível enviar. Confira o e-mail."); }
 });
 document.getElementById("btnSair").addEventListener("click", ()=>auth.signOut());
+// Aviso de versão nova: confere o index.html publicado a cada 5 minutos (e quando a aba volta a ficar visível).
+async function checarVersao(){
+  if(!/^https?:/.test(location.protocol)) return;
+  try{ const r = await fetch(location.pathname + "?v=" + Date.now(), {cache:"no-store"}); if(!r.ok) return;
+    const m = /const APP_VERSION = "([^"]+)"/.exec(await r.text());
+    if(m && m[1] !== APP_VERSION){ const el = document.getElementById("novaVersao"); el.hidden = false; el.style.display = "flex"; } }catch(e){}
+}
+setInterval(checarVersao, 5*60000);
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") checarVersao(); });
 setInterval(()=>{ const lbl = `Follow-up de ${brLong(today())}`; const el = document.getElementById("todayLbl"); if(el.textContent!==lbl){ el.textContent = lbl; render(); } }, 60000);
 </script>
 

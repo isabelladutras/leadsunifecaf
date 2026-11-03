@@ -58,6 +58,12 @@ service cloud.firestore {
       allow read, write: if daEquipe();
     }
 
+    // Ações de rua: qualquer pessoa da equipe registra; só a administradora apaga.
+    match /acoes/{id} {
+      allow read, create, update: if daEquipe();
+      allow delete: if ehAdmin();
+    }
+
     match /academico/{doc} {
       allow read, write: if doAcademico();
     }
