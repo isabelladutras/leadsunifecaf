@@ -247,6 +247,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
       <label class="f">Nome <span style="font-weight:400">(deixe em branco se não souber)</span><input type="text" id="fNome" autocomplete="off"></label>
       <label class="f">WhatsApp (com DDD)*<input type="tel" id="fTel" required placeholder="21 99999-9999" autocomplete="off"></label>
       <label class="f">Curso de interesse<span id="fCursoBox"></span></label>
+      <label class="f">Está entre dois? 2º curso <span style="font-weight:400">(opcional)</span><span id="fCurso2Box"></span></label>
       <label class="f">Modalidade<select id="fMod"><option value="">Não sei ainda</option><option>EAD</option><option>Semipresencial</option></select></label>
       <label class="f">Vendedora<select id="fResp"></select></label>
       <label class="f">Origem<select id="fOrigem"></select></label>
@@ -308,7 +309,8 @@ input[type=file]{font-size:.88rem;max-width:100%}
     <section class="panel">
       <h3 class="sec">Campanhas e Lista fria</h3>
       <p class="tplhelp">Escolha o público, escreva a oferta e mande um por um pelo WhatsApp. Quem responder vai para <b>Em atendimento</b>. Matriculados, quem pediu para não ser chamado e quem não terminou o ensino médio nunca entram.</p>
-      <div class="row" style="margin-bottom:8px"><button class="btn primary" type="button" id="campBF">🖤 Usar campanha Black Friday (até 30/11)</button></div>
+      <div class="row" style="margin-bottom:8px;flex-wrap:wrap"><button class="btn primary" type="button" id="bfReativar" hidden>🔁 Reativar a base na fila das vendedoras (Black Friday)</button><button class="btn" type="button" id="campBF">🖤 Mandar a Black por aqui, um por um</button><button class="btn" type="button" id="campIndic">🎁 Indicação relâmpago (alunos)</button></div>
+      <p class="tplhelp" id="bfInfo" hidden></p>
       <div class="grid2">
         <label class="f">Nome da campanha<input type="text" id="campNome" placeholder="Ex.: Condição de outubro"></label>
         <label class="f">Público<select id="campPub"></select></label>
@@ -319,7 +321,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
       <div class="chips" id="campSit"></div>
       <div class="chips" id="campMot"></div></div>
       <label class="f">Mensagem<textarea id="campMsg"></textarea></label>
-      <p class="tplhelp">Use <code>{nome}</code>, <code>{curso}</code>, <code>{responsavel}</code> e <code>{ofertaBF}</code> (preço da Black Friday do curso do lead, conforme o edital). Para variar o texto, escreva 2 ou 3 versões separadas por uma linha só com <code>---</code>. Quem pediu para não ser chamado nunca entra aqui.</p>
+      <p class="tplhelp">Use <code>{nome}</code>, <code>{curso}</code>, <code>{responsavel}</code> e <code>{ofertaBF}</code> (preço da Black Friday do curso do lead, conforme o edital) e <code>{turmasBF}</code> (turmas que ainda dá para entrar). Para variar o texto, escreva 2 ou 3 versões separadas por uma linha só com <code>---</code>. Quem pediu para não ser chamado nunca entra aqui.</p>
     </section>
     <p class="note" id="campResumo"></p>
     <div id="campList" class="list"></div>
@@ -344,7 +346,7 @@ input[type=file]{font-size:.88rem;max-width:100%}
 <script>if("serviceWorker" in navigator){ window.addEventListener("load", ()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }</script>
 <script>
 /* ---------- regras ---------- */
-const APP_VERSION = "2026-11-03b";   // mude a cada atualização: quem estiver com a versão antiga recebe o aviso para atualizar
+const APP_VERSION = "2026-11-03g";   // mude a cada atualização: quem estiver com a versão antiga recebe o aviso para atualizar
 const MAX_TENT = 3, RETRY_DIAS = 2, META_PADRAO = 30;
 const LIMITE_DIA = 100;   // máximo de contatos automáticos por vendedora por dia; o que passar vai para o dia seguinte
 const LONGO_DIAS = 15, CICLO_DIAS = 150, MAX_CICLOS = 2;   // quem já respondeu (Em atendimento) e sumiu: depois de 3 tentativas, a cada 15 dias; 5 meses por vendedora
@@ -355,6 +357,7 @@ const STAGES = {
   novo:        {label:"Ainda não respondeu",        dias:0,  tpl:"novo",       retry:true, hint:"lead novo, ninguém conversou ainda", grupo:"semresp"},
   negociando:  {label:"Em atendimento",             dias:1,  tpl:"negociando", retry:true, hint:"o lead respondeu e está conversando", grupo:"atend"},
   informado:   {label:"Informações enviadas",       dias:1,  tpl:"informado",  retry:true, hint:"já mandou valores e informações e a pessoa não respondeu; volta em 2 h 30 no mesmo dia", grupo:"atend"},
+  linkenviado: {label:"💳 Link enviado (falta pagar)", dias:0, tpl:"link", retry:true, hint:"mandou o link da matrícula e falta pagar a taxa; volta no mesmo dia e no dia seguinte", grupo:"atend"},
   agendado:    {label:"Pediu para chamar depois",   dias:null, tpl:"agendado", retry:true, hint:"volta sozinho na data pedida", grupo:"agendado"},
   semmedio:    {label:"Não terminou o ensino médio", dias:180, tpl:"semmedio", retry:true, hint:"interagiu, mas ainda não concluiu o ensino médio; volta sozinho em 6 meses", grupo:"agendado"},
   frio:        {label:"Lista fria",                 dias:null, tpl:"frio", motivo:true, hint:"parou de responder ou desistiu; recebe novas ofertas", grupo:"fria"},
@@ -392,7 +395,7 @@ const POS = [
 ];
 const DEFAULT_TPL = {
   novo: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Posso te enviar alguns áudios explicando sobre a faculdade e os valores?\n---\nOi, {nome}! Aqui é a {responsavel}, do polo UniFECAF 😊 Vi seu interesse em fazer faculdade. Posso te mandar um áudio rapidinho com os cursos e valores?\n---\nOlá, {nome}! Tudo certo? Sou a {responsavel}, do polo UniFECAF. Quer que eu te explique por áudio como funcionam as aulas e as condições de matrícula?",
-  novo_retorno: "Oi, {nome}! Te chamei há uns dias e não sei se você viu. Você ainda quer fazer faculdade? Me responde com o curso que te interessa que eu te mando os valores e a condição deste mês.\n---\n{nome}, quero te passar a condição de matrícula deste mês antes que ela mude. Me responde só com SIM que eu te explico tudo num áudio de 1 minuto.\n---\nOi, {nome}! Consigo te passar hoje os valores e as formas de pagamento do curso que você quiser, sem compromisso. Qual área você prefere: gestão, saúde, tecnologia, educação ou engenharia?\n---\n{nome}, ainda dá tempo de entrar na próxima turma. Quer que eu reserve a sua vaga? É só me responder que eu te passo o passo a passo.\n---\nOi, {nome}! Muita gente começa a faculdade pagando menos do que imagina. Quer que eu faça uma simulação do valor do seu curso? Leva 2 minutos.\n---\n{nome}, vou encerrar o seu atendimento por aqui para não te incomodar. Se ainda quiser fazer faculdade, me responde agora que eu te passo tudo. 😊",
+  novo_retorno: "Oi, {nome}! Você ainda pensa em fazer faculdade?\n---\n{nome}, para eu te ajudar melhor: você prefere estudar 100% online ou ir ao polo de vez em quando?\n---\nOi, {nome}! {provasocial} Qual curso você tem vontade de fazer?\n---\n{nome}, posso te mandar um áudio de 1 minuto explicando como funciona e quanto fica? Me responde só com um 👍\n---\nOi, {nome}! Acho que minhas mensagens se perderam no meio de tantas outras 😅 Ainda faz sentido a gente conversar sobre faculdade?\n---\n{nome}, vou parar de te chamar por aqui para não incomodar. Se um dia quiser começar a faculdade, é só me mandar um oi que eu te ajudo 😊",
   informado: "Oi, {nome}! Conseguiu ver as informações que te mandei sobre {curso}? Ficou com alguma dúvida? Se estiver tudo certo, já podemos prosseguir com a sua matrícula 😊\n---\n{nome}, ficou alguma dúvida sobre o que te enviei? Se quiser, já te passo o passo a passo para garantir a sua vaga com a condição de hoje.\n---\nOi, {nome}! Viu os valores de {curso}? Me fala se ficou alguma dúvida, ou se podemos seguir com a matrícula.",
   negociando: "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se ficou alguma dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\n{nome}, me ajuda com uma coisa rápida: você prefere estudar à noite ou de manhã? Assim eu já vejo a melhor opção do curso de {curso} para você.\n---\n{nome}, uma coisa que ajuda muito quem trabalha: no semipresencial você estuda no seu ritmo e só vem ao polo nos encontros. Quer que eu te mostre como fica a rotina no curso de {curso}?\n---\nOi, {nome}! {provasocial} Quer que eu te mostre o passo a passo para você também começar no curso de {curso}?\n---\n{nome}, a próxima turma começa em {inicioTurma}. Quer garantir a sua vaga no curso de {curso} para começar junto com ela?\n---\nOi, {nome}! Imagina você daqui a pouco tempo com o diploma de {curso} na mão. Esse primeiro passo pode ser hoje. Vamos?\n---\n{nome}, não quero ficar te enchendo de mensagem 😊 Me diz só: ainda faz sentido começar a faculdade agora ou prefere que eu te chame mais para frente?\n---\nOi, {nome}! Passando para saber como você está. Ainda pensa em fazer {curso}? Se quiser, te mando as condições atualizadas.",
   semmedio: "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Conversamos há uns meses e você estava finalizando o ensino médio. Já concluiu? Se sim, já podemos ver a sua matrícula no curso de {curso} 😊\n---\nOi, {nome}! Aqui é a {responsavel}, do polo UniFECAF. Da última vez que conversamos, você ainda ia terminar o ensino médio. Deu tudo certo? Se já concluiu, te passo as condições de matrícula deste mês.",
@@ -427,6 +430,12 @@ const DEFAULT_TPL = {
   pos_inicio: "Oi, {nome}! Suas aulas do curso de {curso} começam hoje! 🎉 Qualquer dúvida sobre o portal, as aulas ou os encontros no polo, estamos por aqui. Bons estudos!",
   pos_d30: "Oi, {nome}! Já completou um mês de aulas. Como está sendo o curso de {curso}? Está conseguindo acompanhar as aulas e o portal?",
   pos_indic: "Oi, {nome}! Já faz um mês que você começou o curso de {curso} 😊 Uma pergunta rápida: você conhece alguém que também pensa em fazer faculdade? Pode ser amigo, colega de trabalho ou da família. Me passa o contato que eu cuido com o mesmo carinho que cuidei de você.\n---\nOi, {nome}! Como estão as aulas de {curso}? Se tiver alguém aí perto querendo começar a faculdade, me indica? É só me mandar o nome e o WhatsApp que eu chamo com todo cuidado 😊",
+  rot_ligacao: "• Abertura (10s): \"Oi, {nome}! Aqui é do polo UniFECAF, tudo bem? Te liguei rapidinho porque vi que você está quase lá com a matrícula.\"\n• Confirme o objetivo: \"Você quer começar {curso} agora, certo? O que mais pesa na sua decisão?\"\n• Escute e responda só a dúvida que ela trouxer (valor, tempo, família, documentos)\n• Traga o motivo para agir hoje: a condição da Black vale só para matrícula paga até 30/11, e a mensalidade promocional vale para o curso inteiro\n• Taxa de adesão: apresente primeiro o valor cheio. Se hesitar, ofereça a condição especial \"se garantir até amanhã\" (os valores estão no card, em 💰 Negociação da taxa)\n• Feche com escolha: \"Fazemos agora juntos pelo link, ou prefere que eu te mande e te ligo em 15 minutos?\"\n• Se não fechar: combine dia e hora exatos e registre no card (Registrar conversa → próximo passo)",
+  link: "Oi, {nome}! Conseguiu abrir o link da matrícula? Se travou em alguma parte, me fala que eu te ajudo agora 😊\n---\n{nome}, ficou faltando só o pagamento da taxa para garantir a sua vaga no curso de {curso}. Quer que eu te mande o link de novo?\n---\nOi, {nome}! A condição especial só vale para matrícula paga dentro do prazo. Consegue finalizar hoje? Se preferir, eu te ligo e fazemos juntos em 5 minutos.\n---\n{nome}, sua vaga no curso de {curso} está separada. Aconteceu alguma coisa? Me conta que eu tento resolver por aqui.",
+  bf_1: "Oi, {nome}! Ainda pensa em fazer {curso}? Pergunto porque começou a Black Friday da UniFECAF e a mensalidade caiu bastante, valendo para o curso inteiro. Quer que eu te mostre quanto fica?\n---\n{nome}, você ainda pensa em começar a faculdade? 🖤",
+  bf_2: "Oi, {nome}! Te passo direto: na Black Friday da UniFECAF, {ofertaBF}\nE dá para entrar na {turmasBF}. {provasocial} Quer que eu veja a sua vaga?",
+  bf_atend: "Oi, {nome}! Novidade boa para você: começou a Black Friday da UniFECAF 🖤 Até 30/11, {ofertaBF}\nVamos garantir a sua vaga?\n---\n{nome}, lembrei de você: com a Black Friday da UniFECAF, {ofertaBF}\nVale só para matrículas até 30/11, e dá para entrar na {turmasBF}. Quer que eu já deixe tudo encaminhado?",
+  bf_3: "{nome}, a condição da Black vale só para matrícula feita até 30/11 e não será prorrogada. Se não fizer sentido agora, tudo bem: me responde \"agora não\" que eu não te chamo mais por isso 😊 Se fizer, me manda um SIM.",
   temp_quente: "Oi, {nome}! Vamos garantir a sua vaga no curso de {curso}? Te mando agora o link da matrícula e te acompanho em cada passo.\n---\n{nome}, já está tudo certo para você começar. Posso abrir a sua matrícula agora? Leva uns 5 minutinhos.\n---\nOi, {nome}! Só falta você confirmar para eu reservar a sua vaga no curso de {curso}. Fechamos hoje?\n---\n{nome}, me diz o que falta para a gente fechar a sua matrícula que eu resolvo por aqui.",
   temp_frio: "Oi, {nome}! Vou ser breve: ainda tem interesse no curso de {curso}? Me responde com SIM ou NÃO que eu já organizo aqui.\n---\nOi, {nome}! {provasocial} Se ainda quiser começar, te ajudo com tudo por aqui.\n---\n{nome}, vou deixar seu atendimento em pausa para não te incomodar. Se quiser retomar o curso de {curso}, é só me responder 😊",
   visitou: "Oi, {nome}! Foi um prazer te receber aqui no polo 😊 Ficou alguma dúvida sobre o curso de {curso}? Se quiser, já deixo a sua matrícula encaminhada.\n---\n{nome}, depois de conhecer o polo, o que achou? Quer que eu reserve a sua vaga no curso de {curso}?\n---\nOi, {nome}! Lembra da nossa conversa aqui no polo? Consigo finalizar a sua matrícula por aqui mesmo, rapidinho. Vamos?",
@@ -434,9 +443,9 @@ const DEFAULT_TPL = {
   pos_remat: "Oi, {nome}! A rematrícula do próximo semestre está chegando. Quer que eu te ajude a garantir a sua vaga no curso de {curso}?"
 };
 // Textos padrão antigos: se a mensagem salva for igual a um deles, usamos a versão nova (com mais estratégias).
-const TPL_ANTIGOS = {"negociando": ["Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se tiver qualquer dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\nOi, {nome}, tudo bem? Passando para saber se ficou alguma dúvida sobre o curso de {curso}. Estou por aqui!\n---\n{nome}, tudo certo? Queria saber o que você achou das informações do curso de {curso}. Posso te ajudar em algo?", "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se ficou alguma dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\n{nome}, uma coisa que ajuda muito quem trabalha: no semipresencial você estuda no seu ritmo e só vem ao polo nos encontros. Quer que eu te mostre como fica a rotina no curso de {curso}?\n---\nOi, {nome}! As matrículas para a próxima turma estão abertas e a condição deste mês ainda está valendo. Quer que eu já reserve a sua vaga no curso de {curso}?\n---\n{nome}, não quero ficar te enchendo de mensagem 😊 Me diz só: ainda faz sentido começar a faculdade agora ou prefere que eu te chame mais para frente?\n---\nOi, {nome}! Passando para saber como você está. Ainda pensa em fazer {curso}? Se quiser, te mando as condições atualizadas."], "obj_preco": ["Oi, {nome}! Fiquei pensando no que você falou sobre o valor. Consegui ver uma condição de parcelamento para o curso de {curso} que pode caber melhor. Posso te mandar um áudio rapidinho explicando?", "Oi, {nome}! Fiquei pensando no que você falou sobre o valor. Consegui ver uma condição de parcelamento para o curso de {curso} que pode caber melhor. Posso te mandar um áudio rapidinho explicando?\n---\n{nome}, fiz uma conta rápida: dividindo por dia, a mensalidade do curso de {curso} fica bem menor do que parece. Quer que eu te mande a simulação certinha?\n---\nOi, {nome}! Me diz com sinceridade: se o valor coubesse no seu bolso, você começaria agora? Me fala até quanto dá para investir por mês que eu vejo a melhor opção para você.\n---\n{nome}, saiu condição nova de matrícula este mês. Posso te mandar os valores atualizados do curso de {curso} para você comparar?\n---\nOi, {nome}! Lembrei de você porque temos condições novas para o curso de {curso}. Quer dar uma olhada?"], "obj_horario": ["Oi, {nome}! Lembrei que o seu receio era o tempo. No semipresencial você organiza os estudos no seu ritmo e os encontros no polo são poucos. Quer que eu te mostre como fica a rotina?", "Oi, {nome}! Lembrei que o seu receio era o tempo. No semipresencial você organiza os estudos no seu ritmo e os encontros no polo são poucos. Quer que eu te mostre como fica a rotina?\n---\n{nome}, temos muitos alunos que trabalham o dia todo e estudam à noite, até pelo celular. Quer que eu te conte como eles organizam a semana?\n---\nOi, {nome}! Quer que eu te mostre quanto tempo por semana o curso de {curso} pede? Assim você vê se cabe na sua rotina antes de decidir.\n---\n{nome}, se o tempo for o único ponto, a gente monta juntos um plano de estudos que caiba na sua semana. Vamos?\n---\nOi, {nome}! Sua rotina deu uma folga? Se a faculdade ainda estiver nos seus planos, te passo as condições deste mês."], "obj_familia": ["Oi, {nome}! Conseguiu conversar em casa sobre a faculdade? Se ajudar, posso te mandar um resumo com valores e duração do curso de {curso} para você mostrar para eles.", "Oi, {nome}! Conseguiu conversar em casa sobre a faculdade? Se ajudar, posso te mandar um resumo com valores e duração do curso de {curso} para você mostrar para eles.\n---\nOi, {nome}! Se ajudar, posso conversar direto com quem vai decidir com você. É só me passar o melhor horário.\n---\n{nome}, conseguiram decidir em casa? Se surgiu alguma dúvida deles, me manda que eu respondo.\n---\nOi, {nome}! Preparei um resumo bem simples do curso de {curso}: duração, valores e reconhecimento do MEC. Te mando para mostrar em casa?\n---\nOi, {nome}! Passando para saber se vocês decidiram sobre a faculdade. Estou por aqui para o que precisar."], "obj_curso": ["Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?", "Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?\n---\n{nome}, separei algumas áreas em que quem se forma em {curso} costuma trabalhar. Quer que eu te mande?\n---\nOi, {nome}! Ainda está em dúvida sobre o curso? Se quiser, te ajudo a comparar com outras opções da área que você gosta.\n---\n{nome}, me conta o que você imagina fazer depois de se formar que eu te digo qual curso combina mais com isso.\n---\nOi, {nome}! Já decidiu qual curso quer fazer? Te passo as condições deste mês para o que você escolher."], "obj_documentos": ["Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?", "Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?\n---\nOi, {nome}! Faltou só a documentação para garantir sua vaga. Pode me mandar as fotos por aqui mesmo, que eu confiro para você.\n---\n{nome}, se estiver faltando algum documento, me diz qual que eu te explico como conseguir rapidinho.\n---\nOi, {nome}! Sua vaga no curso de {curso} está quase garantida, só falta a documentação. Conseguimos finalizar hoje?\n---\nOi, {nome}! Ainda dá para concluir sua matrícula no curso de {curso}. Quer retomar a parte dos documentos?"], "obj_sumiu": ["Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?", "Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?\n---\nOi, {nome}! Tudo bem por aí? Fiquei pensando se aconteceu alguma coisa. Se a faculdade ainda estiver nos seus planos, estou aqui.\n---\n{nome}, vou ser breve: ainda tem interesse no curso de {curso}? Me responde com SIM ou NÃO que eu já organizo aqui.\n---\n{nome}, vou deixar seu atendimento em pausa para não te incomodar. Se quiser retomar o curso de {curso}, é só me responder 😊\n---\nOi, {nome}! Faz um tempo que conversamos. Temos condições novas de matrícula, quer que eu te passe?"], "obj_semtempo": ["Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊", "Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊\n---\nOi, {nome}! Sei que a rotina está corrida. Prefere que eu te mande um áudio curtinho para ouvir quando puder?\n---\n{nome}, qual o melhor horário para a gente conversar 5 minutinhos sobre o curso de {curso}?\n---\nOi, {nome}! Te mando um resumo por escrito, assim você lê no seu tempo. Pode ser?\n---\nOi, {nome}! A agenda deu uma folga? Ainda dá para começar o curso de {curso} nesta turma."], "obj_conversando": ["Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?", "Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?\n---\n{nome}, ficou faltando só a gente definir o próximo passo. Posso te mandar o link da matrícula?\n---\nOi, {nome}! Retomando: tem alguma dúvida que eu possa tirar agora para você seguir com a matrícula?\n---\n{nome}, as matrículas da próxima turma estão abertas. Quer garantir a sua vaga no curso de {curso}?\n---\nOi, {nome}! Ainda pensa em começar o curso de {curso}? Te passo as condições atualizadas."], "obj_outro": ["Oi, {nome}! Tudo bem? Passando para retomarmos nossa conversa sobre o curso de {curso}. Posso te ajudar com algo?", "Oi, {nome}! Tudo bem? Passando para retomarmos nossa conversa sobre o curso de {curso}. Posso te ajudar com algo?\n---\nOi, {nome}! Fiquei com a nossa conversa na cabeça. Posso te ajudar com mais alguma informação sobre o curso de {curso}?\n---\n{nome}, ainda faz sentido conversarmos sobre a faculdade agora? Se preferir mais para frente, me diz quando que eu te chamo.\n---\nOi, {nome}! As matrículas para a próxima turma estão abertas. Quer que eu reserve a sua vaga?\n---\nOi, {nome}! Passando para saber se a faculdade ainda está nos seus planos. Estou por aqui."], "obj_naorespondeu": ["Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?\n---\nOi, {nome}! Não sei se você conseguiu ver minhas mensagens. Posso te mandar um resumo rapidinho do curso de {curso}?", "Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?\n---\nOi, {nome}! Não sei se você conseguiu ver minhas mensagens. Posso te mandar um resumo rapidinho do curso de {curso}?\n---\nOi, {nome}! Vou ser breve: ainda tem interesse no curso de {curso}? Me responde com SIM ou NÃO que eu já organizo aqui.\n---\n{nome}, vou encerrar por aqui para não te incomodar. Se mudar de ideia, é só me chamar 😊\n---\nOi, {nome}! Temos condições novas de matrícula este mês. Quer que eu te passe?"], "rot_preco": ["• Valide: \"entendo, é um investimento importante\"\n• Traga o valor para o dia a dia (quanto dá por dia)\n• Apresente o parcelamento e a condição vigente, se houver\n• Lembre o retorno: o que o diploma muda no salário ou na carreira dela\n• Feche com escolha: \"prefere começar com a condição A ou B?\""], "rot_horario": ["• Pergunte como é a rotina dela hoje (trabalho, filhos)\n• Explique como funcionam as aulas e os encontros no polo\n• Dê um exemplo real de aluna com rotina parecida que está conseguindo\n• Sugira quanto tempo por dia ela precisaria reservar\n• Pergunte: \"com isso, cabe na sua rotina?\""], "rot_naorespondeu": ["• Áudio de até 1 minuto resumindo o principal: curso, formato e valor\n• Uma pergunta simples no final, de sim ou não\n• Evite mandar muitas mensagens seguidas"], "rot_sumiu": ["• Áudio curto (menos de 30 segundos), tom leve, sem cobrança\n• Lembre em uma frase o que vocês conversaram\n• Traga uma novidade (condição, prazo de início das aulas)\n• Pergunte se ainda faz sentido ou se prefere retomar mais para frente"]};
+const TPL_ANTIGOS = {"negociando": ["Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se tiver qualquer dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\nOi, {nome}, tudo bem? Passando para saber se ficou alguma dúvida sobre o curso de {curso}. Estou por aqui!\n---\n{nome}, tudo certo? Queria saber o que você achou das informações do curso de {curso}. Posso te ajudar em algo?", "Oi, {nome}! Conseguiu pensar sobre a matrícula no curso de {curso}? Se ficou alguma dúvida sobre valores ou aulas, me fala que eu te ajudo.\n---\n{nome}, uma coisa que ajuda muito quem trabalha: no semipresencial você estuda no seu ritmo e só vem ao polo nos encontros. Quer que eu te mostre como fica a rotina no curso de {curso}?\n---\nOi, {nome}! As matrículas para a próxima turma estão abertas e a condição deste mês ainda está valendo. Quer que eu já reserve a sua vaga no curso de {curso}?\n---\n{nome}, não quero ficar te enchendo de mensagem 😊 Me diz só: ainda faz sentido começar a faculdade agora ou prefere que eu te chame mais para frente?\n---\nOi, {nome}! Passando para saber como você está. Ainda pensa em fazer {curso}? Se quiser, te mando as condições atualizadas."], "obj_preco": ["Oi, {nome}! Fiquei pensando no que você falou sobre o valor. Consegui ver uma condição de parcelamento para o curso de {curso} que pode caber melhor. Posso te mandar um áudio rapidinho explicando?", "Oi, {nome}! Fiquei pensando no que você falou sobre o valor. Consegui ver uma condição de parcelamento para o curso de {curso} que pode caber melhor. Posso te mandar um áudio rapidinho explicando?\n---\n{nome}, fiz uma conta rápida: dividindo por dia, a mensalidade do curso de {curso} fica bem menor do que parece. Quer que eu te mande a simulação certinha?\n---\nOi, {nome}! Me diz com sinceridade: se o valor coubesse no seu bolso, você começaria agora? Me fala até quanto dá para investir por mês que eu vejo a melhor opção para você.\n---\n{nome}, saiu condição nova de matrícula este mês. Posso te mandar os valores atualizados do curso de {curso} para você comparar?\n---\nOi, {nome}! Lembrei de você porque temos condições novas para o curso de {curso}. Quer dar uma olhada?"], "obj_horario": ["Oi, {nome}! Lembrei que o seu receio era o tempo. No semipresencial você organiza os estudos no seu ritmo e os encontros no polo são poucos. Quer que eu te mostre como fica a rotina?", "Oi, {nome}! Lembrei que o seu receio era o tempo. No semipresencial você organiza os estudos no seu ritmo e os encontros no polo são poucos. Quer que eu te mostre como fica a rotina?\n---\n{nome}, temos muitos alunos que trabalham o dia todo e estudam à noite, até pelo celular. Quer que eu te conte como eles organizam a semana?\n---\nOi, {nome}! Quer que eu te mostre quanto tempo por semana o curso de {curso} pede? Assim você vê se cabe na sua rotina antes de decidir.\n---\n{nome}, se o tempo for o único ponto, a gente monta juntos um plano de estudos que caiba na sua semana. Vamos?\n---\nOi, {nome}! Sua rotina deu uma folga? Se a faculdade ainda estiver nos seus planos, te passo as condições deste mês."], "obj_familia": ["Oi, {nome}! Conseguiu conversar em casa sobre a faculdade? Se ajudar, posso te mandar um resumo com valores e duração do curso de {curso} para você mostrar para eles.", "Oi, {nome}! Conseguiu conversar em casa sobre a faculdade? Se ajudar, posso te mandar um resumo com valores e duração do curso de {curso} para você mostrar para eles.\n---\nOi, {nome}! Se ajudar, posso conversar direto com quem vai decidir com você. É só me passar o melhor horário.\n---\n{nome}, conseguiram decidir em casa? Se surgiu alguma dúvida deles, me manda que eu respondo.\n---\nOi, {nome}! Preparei um resumo bem simples do curso de {curso}: duração, valores e reconhecimento do MEC. Te mando para mostrar em casa?\n---\nOi, {nome}! Passando para saber se vocês decidiram sobre a faculdade. Estou por aqui para o que precisar."], "obj_curso": ["Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?", "Oi, {nome}! Separei as informações que você perguntou sobre o curso de {curso}: grade, duração e reconhecimento do diploma pelo MEC. Posso te mandar agora?\n---\n{nome}, separei algumas áreas em que quem se forma em {curso} costuma trabalhar. Quer que eu te mande?\n---\nOi, {nome}! Ainda está em dúvida sobre o curso? Se quiser, te ajudo a comparar com outras opções da área que você gosta.\n---\n{nome}, me conta o que você imagina fazer depois de se formar que eu te digo qual curso combina mais com isso.\n---\nOi, {nome}! Já decidiu qual curso quer fazer? Te passo as condições deste mês para o que você escolher."], "obj_documentos": ["Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?", "Oi, {nome}! Vi que ficou pendente a parte da documentação. É mais simples do que parece: te mando a lista e a gente resolve por aqui mesmo. Pode ser?\n---\nOi, {nome}! Faltou só a documentação para garantir sua vaga. Pode me mandar as fotos por aqui mesmo, que eu confiro para você.\n---\n{nome}, se estiver faltando algum documento, me diz qual que eu te explico como conseguir rapidinho.\n---\nOi, {nome}! Sua vaga no curso de {curso} está quase garantida, só falta a documentação. Conseguimos finalizar hoje?\n---\nOi, {nome}! Ainda dá para concluir sua matrícula no curso de {curso}. Quer retomar a parte dos documentos?"], "obj_sumiu": ["Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?", "Oi, {nome}! Não quero ficar te enchendo de mensagem 😊 Só me diz: ainda faz sentido começar a faculdade este semestre ou prefere que eu te chame mais para frente?\n---\nOi, {nome}! Tudo bem por aí? Fiquei pensando se aconteceu alguma coisa. Se a faculdade ainda estiver nos seus planos, estou aqui.\n---\n{nome}, vou ser breve: ainda tem interesse no curso de {curso}? Me responde com SIM ou NÃO que eu já organizo aqui.\n---\n{nome}, vou deixar seu atendimento em pausa para não te incomodar. Se quiser retomar o curso de {curso}, é só me responder 😊\n---\nOi, {nome}! Faz um tempo que conversamos. Temos condições novas de matrícula, quer que eu te passe?"], "obj_semtempo": ["Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊", "Oi, {nome}! Tudo bem? Conseguiu um tempinho agora? Fico à disposição para continuarmos sobre o curso de {curso} 😊\n---\nOi, {nome}! Sei que a rotina está corrida. Prefere que eu te mande um áudio curtinho para ouvir quando puder?\n---\n{nome}, qual o melhor horário para a gente conversar 5 minutinhos sobre o curso de {curso}?\n---\nOi, {nome}! Te mando um resumo por escrito, assim você lê no seu tempo. Pode ser?\n---\nOi, {nome}! A agenda deu uma folga? Ainda dá para começar o curso de {curso} nesta turma."], "obj_conversando": ["Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?", "Oi, {nome}! Passando para darmos continuidade à nossa conversa sobre o curso de {curso}. Ficou alguma dúvida?\n---\n{nome}, ficou faltando só a gente definir o próximo passo. Posso te mandar o link da matrícula?\n---\nOi, {nome}! Retomando: tem alguma dúvida que eu possa tirar agora para você seguir com a matrícula?\n---\n{nome}, as matrículas da próxima turma estão abertas. Quer garantir a sua vaga no curso de {curso}?\n---\nOi, {nome}! Ainda pensa em começar o curso de {curso}? Te passo as condições atualizadas."], "obj_outro": ["Oi, {nome}! Tudo bem? Passando para retomarmos nossa conversa sobre o curso de {curso}. Posso te ajudar com algo?", "Oi, {nome}! Tudo bem? Passando para retomarmos nossa conversa sobre o curso de {curso}. Posso te ajudar com algo?\n---\nOi, {nome}! Fiquei com a nossa conversa na cabeça. Posso te ajudar com mais alguma informação sobre o curso de {curso}?\n---\n{nome}, ainda faz sentido conversarmos sobre a faculdade agora? Se preferir mais para frente, me diz quando que eu te chamo.\n---\nOi, {nome}! As matrículas para a próxima turma estão abertas. Quer que eu reserve a sua vaga?\n---\nOi, {nome}! Passando para saber se a faculdade ainda está nos seus planos. Estou por aqui."], "obj_naorespondeu": ["Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?\n---\nOi, {nome}! Não sei se você conseguiu ver minhas mensagens. Posso te mandar um resumo rapidinho do curso de {curso}?", "Oi, {nome}! Te mandei algumas informações sobre o curso de {curso} e não sei se chegaram direitinho. Quer que eu te resuma tudo num áudio de 1 minuto?\n---\nOi, {nome}! Não sei se você conseguiu ver minhas mensagens. Posso te mandar um resumo rapidinho do curso de {curso}?\n---\nOi, {nome}! Vou ser breve: ainda tem interesse no curso de {curso}? Me responde com SIM ou NÃO que eu já organizo aqui.\n---\n{nome}, vou encerrar por aqui para não te incomodar. Se mudar de ideia, é só me chamar 😊\n---\nOi, {nome}! Temos condições novas de matrícula este mês. Quer que eu te passe?"], "rot_preco": ["• Valide: \"entendo, é um investimento importante\"\n• Traga o valor para o dia a dia (quanto dá por dia)\n• Apresente o parcelamento e a condição vigente, se houver\n• Lembre o retorno: o que o diploma muda no salário ou na carreira dela\n• Feche com escolha: \"prefere começar com a condição A ou B?\""], "rot_horario": ["• Pergunte como é a rotina dela hoje (trabalho, filhos)\n• Explique como funcionam as aulas e os encontros no polo\n• Dê um exemplo real de aluna com rotina parecida que está conseguindo\n• Sugira quanto tempo por dia ela precisaria reservar\n• Pergunte: \"com isso, cabe na sua rotina?\""], "rot_naorespondeu": ["• Áudio de até 1 minuto resumindo o principal: curso, formato e valor\n• Uma pergunta simples no final, de sim ou não\n• Evite mandar muitas mensagens seguidas"], "rot_sumiu": ["• Áudio curto (menos de 30 segundos), tom leve, sem cobrança\n• Lembre em uma frase o que vocês conversaram\n• Traga uma novidade (condição, prazo de início das aulas)\n• Pergunte se ainda faz sentido ou se prefere retomar mais para frente"], "novo_retorno": ["Oi, {nome}! Te chamei há uns dias e não sei se você viu. Você ainda quer fazer faculdade? Me responde com o curso que te interessa que eu te mando os valores e a condição deste mês.\n---\n{nome}, quero te passar a condição de matrícula deste mês antes que ela mude. Me responde só com SIM que eu te explico tudo num áudio de 1 minuto.\n---\nOi, {nome}! Consigo te passar hoje os valores e as formas de pagamento do curso que você quiser, sem compromisso. Qual área você prefere: gestão, saúde, tecnologia, educação ou engenharia?\n---\n{nome}, ainda dá tempo de entrar na próxima turma. Quer que eu reserve a sua vaga? É só me responder que eu te passo o passo a passo.\n---\nOi, {nome}! Muita gente começa a faculdade pagando menos do que imagina. Quer que eu faça uma simulação do valor do seu curso? Leva 2 minutos.\n---\n{nome}, vou encerrar o seu atendimento por aqui para não te incomodar. Se ainda quiser fazer faculdade, me responde agora que eu te passo tudo. 😊"], "bf_1": ["Oi, {nome}! Ainda pensa em fazer {curso}? Pergunto porque começou a Black Friday da UniFECAF e a mensalidade do 1º semestre caiu bastante. Quer que eu te mostre quanto fica?\n---\n{nome}, você ainda pensa em começar a faculdade? 🖤"], "bf_2": ["Oi, {nome}! Te passo direto: na Black Friday da UniFECAF, {ofertaBF}\nDo 2º semestre em diante, 50% de bolsa. {provasocial} Quer que eu veja a sua vaga?", "Oi, {nome}! Te passo direto: na Black Friday da UniFECAF, {ofertaBF}\nA taxa de adesão começa em R$ 49,99 e dá para entrar na {turmasBF}. {provasocial} Quer que eu veja a sua vaga?"], "bf_3": ["{nome}, a condição da Black vale só até 30/11. Se não fizer sentido agora, tudo bem: me responde \"agora não\" que eu não te chamo mais por isso 😊 Se fizer, me manda um SIM."], "bf_atend": ["Oi, {nome}! Novidade boa para você: começou a Black Friday da UniFECAF 🖤 Até 30/11, {ofertaBF}\nDo 2º semestre em diante, 50% de bolsa. Vamos garantir a sua vaga?\n---\n{nome}, lembrei de você: com a Black Friday da UniFECAF, {ofertaBF}\nVale só para matrículas até 30/11. Quer que eu já deixe tudo encaminhado?", "Oi, {nome}! Novidade boa para você: começou a Black Friday da UniFECAF 🖤 Até 30/11, {ofertaBF}\nTaxa de adesão a partir de R$ 49,99. Vamos garantir a sua vaga?\n---\n{nome}, lembrei de você: com a Black Friday da UniFECAF, {ofertaBF}\nVale só para matrículas até 30/11, e dá para entrar na {turmasBF}. Quer que eu já deixe tudo encaminhado?"], "rot_ligacao": ["• Abertura (10s): \"Oi, {nome}! Aqui é do polo UniFECAF, tudo bem? Te liguei rapidinho porque vi que você está quase lá com a matrícula.\"\n• Confirme o objetivo: \"Você quer começar {curso} agora, certo? O que mais pesa na sua decisão?\"\n• Escute e responda só a dúvida que ela trouxer (valor, tempo, família, documentos)\n• Traga o motivo para agir hoje: a condição da Black vale só para matrícula paga até 30/11 (se for verdade no momento)\n• Feche com escolha: \"Fazemos agora juntos pelo link, ou prefere que eu te mande e te ligo em 15 minutos?\"\n• Se não fechar: combine dia e hora exatos e registre no card (Registrar conversa → próximo passo)"]};
 const TPL_GROUPS = [
-  {title:"Leads", keys:[["novo","Ainda não respondeu: primeira mensagem"],["temp_quente","Em atendimento 🔥 quente (fechamento direto)"],["temp_frio","Em atendimento ❄️ frio"],["visitou","Visitou o polo"],["novo_retorno","Ainda não respondeu: 2ª e 3ª mensagens de cada vendedora (em ordem: as 2 primeiras são da 1ª vendedora, as 2 seguintes da 2ª e as 2 últimas da 3ª)"],["negociando","Em atendimento (quando não há conversa registrada)"],["agendado","Pediu para chamar depois"],["semmedio","Não terminou o ensino médio (retorno em 6 meses)"],["frio","Parou de responder (nova tentativa após 30 dias)"]]},
+  {title:"Leads", keys:[["novo","Ainda não respondeu: primeira mensagem"],["rot_ligacao","📞 Roteiro de ligação (aparece nos leads quentes e com link enviado)"],["link","💳 Link enviado, falta pagar (em ordem: mesmo dia, dia seguinte, +1 dia, +2 dias)"],["bf_1","Black Friday · 1ª mensagem (pergunta curta)"],["bf_2","Black Friday · 2ª mensagem (preço do curso)"],["bf_3","Black Friday · última (prazo 30/11, saída fácil)"],["bf_atend","Black Friday · para quem já está em atendimento"],["temp_quente","Em atendimento 🔥 quente (fechamento direto)"],["temp_frio","Em atendimento ❄️ frio"],["visitou","Visitou o polo"],["novo_retorno","Ainda não respondeu: 2ª e 3ª mensagens de cada vendedora (em ordem: as 2 primeiras são da 1ª vendedora, as 2 seguintes da 2ª e as 2 últimas da 3ª)"],["negociando","Em atendimento (quando não há conversa registrada)"],["agendado","Pediu para chamar depois"],["semmedio","Não terminou o ensino médio (retorno em 6 meses)"],["frio","Parou de responder (nova tentativa após 30 dias)"]]},
   {title:"Follow-up pelo que travou (usadas em ordem, uma por tentativa; quando acabam, recomeçam pela 2ª. Separe cada uma com ---)", keys:OBJECOES.map(([k,t])=>["obj_"+k, t])},
   {title:"Roteiros de áudio (tópicos do que falar)", keys:[["rot_novo","Primeiro áudio (lead novo)"], ...OBJECOES.map(([k,t])=>["rot_"+k, t])]},
   {title:"Apresentação", keys:[["antigo","Lead antigo (não sabemos nada dele)"],["reapresentacao","Lead passado para outra vendedora porque não respondeu"],["rot_antigo","Roteiro do áudio para lead antigo"]]},
@@ -445,31 +454,110 @@ const TPL_GROUPS = [
 
 let db = null, leads = [], tpl = {...DEFAULT_TPL}, equipe = ["Isabella"], rematJanelas = [], metas = {};
 let dupOk = false, impText = "", impParsed = null, importing = false;
-// Black Friday UniFECAF 2026 (edital, vigência 03/11 a 30/11/2026). Mensalidade do 1º semestre; 2º semestre em diante com 50% de bolsa.
-// EAD: turma de dezembro/2026. Semipresencial: turma de janeiro/2027. Cursos não listados seguem a tabela normal.
-const BF_FIM = "2026-11-30";
-const BF_EAD = ["Administração","Ciências Contábeis","Design de Interiores","Design Gráfico","Gestão Comercial","Gestão do Agronegócio","Gestão de Recursos Humanos","Gestão de Segurança Privada","Gestão de Segurança Pública","Gestão Financeira","Gestão Pública","Logística","Marketing","Marketing Digital","Processos Gerenciais","Análise e Desenvolvimento de Sistemas","Ciência de Dados","Computação em Nuvem","Defesa Cibernética","Gestão da Tecnologia da Informação","Sistemas de Informação","Creator e Digital Influencer"];
-const BF_SEMI = ["Administração","Ciências Contábeis","Gestão Comercial","Gestão de Recursos Humanos","Gestão Financeira","Gestão Pública","Logística","Marketing","Marketing Digital","Processos Gerenciais","Psicopedagogia","Análise e Desenvolvimento de Sistemas","Gestão da Tecnologia da Informação","Design de Interiores","Design Gráfico","Engenharia de Computação","Biomedicina","Educação Física (Bacharelado)","Educação Física (Licenciatura)","Estética e Cosmética","Farmácia","Fisioterapia","Nutrição","Radiologia","Terapia Ocupacional","Arquitetura e Urbanismo","Engenharia Civil","Engenharia de Produção","Engenharia Elétrica","Serviço Social"];
-function ofertaBF(curso, mod){
-  const c = norm(curso||""); const tem = arr => arr.some(x=>norm(x)===c);
-  const lista = "a mensalidade do 1º semestre fica em:\n• R$ 99,00 nos cursos EAD participantes (turma de dezembro)\n• R$ 149,00 em Pedagogia semipresencial (turma de janeiro)\n• R$ 199,99 nos semipresenciais participantes (turma de janeiro)";
-  if(!c) return lista;
-  if(c===norm("Pedagogia")) return `no curso de ${curso} a mensalidade do 1º semestre fica em R$ 149,00 (semipresencial, turma de janeiro).`;
-  let e = tem(BF_EAD), sm = tem(BF_SEMI);
-  if(mod==="EAD" && e) sm = false; if(mod==="Semipresencial" && sm) e = false;
-  if(e && sm) return `no curso de ${curso} a mensalidade do 1º semestre fica em R$ 99,00 no EAD (turma de dezembro) ou R$ 199,99 no semipresencial (turma de janeiro).`;
-  if(e) return `no curso de ${curso} a mensalidade do 1º semestre fica em R$ 99,00 (EAD, turma de dezembro).`;
-  if(sm) return `no curso de ${curso} a mensalidade do 1º semestre fica em R$ 199,99 (semipresencial, turma de janeiro).`;
-  return lista;
+// Black Friday UniFECAF 2026 — edital v6 (03/11/2026). Vigência: matrículas de 03/11 a 30/11/2026 (com taxa de adesão paga).
+// Turmas: Nov/26 (matrícula até 05/11), Dez/26 e Jan/27. EAD e Semipresencial. A mensalidade promocional vale pelo CURSO INTEIRO
+// (aluno adimplente ao fim de cada semestre; reajuste anual só pelo IGP-M). Valores já com 10% de pontualidade.
+// Taxa de adesão: mínimo R$ 49,99 e no máximo uma mensalidade. Planos antecipado ou postecipado. Cursos não listados: tabela normal.
+const BF_FIM = "2026-11-30", BF_TURMA_NOV = "2026-11-05";
+const BF_PRECOS = {   // curso (nome da lista do CRM) -> {ead, semi}
+  "Administração":{ead:149, semi:199}, "Ciências Contábeis":{ead:149}, "Design de Interiores":{ead:149, semi:199}, "Design Gráfico":{ead:149},
+  "Gestão Comercial":{ead:149}, "Gestão de Segurança Privada":{ead:149}, "Gestão de Segurança Pública":{ead:149}, "Gestão do Agronegócio":{ead:149},
+  "Gestão Financeira":{ead:149}, "Gestão Pública":{ead:149}, "Logística":{ead:149}, "Marketing":{ead:149, semi:199}, "Marketing Digital":{ead:149, semi:199},
+  "Processos Gerenciais":{ead:149}, "Gestão de Recursos Humanos":{ead:149, semi:199},
+  "Adm Tech":{ead:199}, "Análise e Desenvolvimento de Sistemas":{ead:199, semi:199}, "Ciência de Dados":{ead:199}, "Computação em Nuvem":{ead:199},
+  "Creator e Digital Influencer":{ead:199}, "Gestão da Tecnologia da Informação":{ead:199, semi:199}, "Inteligência Artificial e Automação Digital":{ead:199},
+  "Segurança Cibernética":{ead:199}, "Sistemas de Informação":{ead:199},
+  "Pedagogia":{semi:149}, "Psicopedagogia":{semi:149},
+  "Arquitetura e Urbanismo":{semi:249}, "Biomedicina":{semi:249}, "Educação Física (Bacharelado)":{semi:249}, "Educação Física (Licenciatura)":{semi:249},
+  "Engenharia Civil":{semi:249}, "Engenharia de Computação":{semi:249}, "Engenharia de Produção":{semi:249}, "Engenharia Elétrica":{semi:249},
+  "Estética e Cosmética":{semi:249}, "Farmácia":{semi:249}, "Fisioterapia":{semi:249}, "Nutrição":{semi:249}, "Radiologia":{semi:249}, "Terapia Ocupacional":{semi:249}
+};
+const reais = v => `R$ ${v},00`;
+const turmasBF = () => today() <= BF_TURMA_NOV ? "turma de novembro (matrícula até 05/11), de dezembro ou de janeiro" : "turma de dezembro ou de janeiro";
+function precoBF(curso){ const c = norm(curso||""); const k = Object.keys(BF_PRECOS).find(x=>norm(x)===c); return k ? BF_PRECOS[k] : null; }
+// Negociação da taxa de adesão (edital: mínimo R$ 49,99, máximo 1 mensalidade). Começa cheia e desce como condição especial com prazo.
+const fmtR = v => "R$ " + Number(v).toFixed(2).replace(".",",");
+function taxaEscada(l){
+  const p = precoBF(l.curso) || precoBF(l.curso2); if(!p) return null;
+  const m = l.modalidade==="Semipresencial" ? (p.semi||p.ead) : l.modalidade==="EAD" ? (p.ead||p.semi) : Math.max(p.ead||0, p.semi||0);
+  const meio = Math.max(49.99, Math.round(m/2));
+  return {cheia:m, meio, minima:49.99};
 }
-const BF_MSG = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Chegou a Black Friday UniFECAF 🖤\nSó para matrículas feitas até 30/11, {ofertaBF}\nE do 2º semestre em diante você tem 50% de bolsa. Quer que eu garanta a sua vaga?\n---\n{nome}, a Black Friday da UniFECAF começou e lembrei de você 🖤 Até 30/11, {ofertaBF}\nDo 2º semestre em diante, 50% de bolsa. Posso te explicar como funciona?";
+// Prazo da condição especial (Configurações → Datas reais): 1 dia, 2 dias, até sexta ou data fixa; com "usar data real" vale a data da campanha mais próxima, se vier antes.
+let prazoTaxaCfg = {modo:"48h", data:"", usarReal:true};
+function prazoTaxa(){
+  const t = today(), c = prazoTaxaCfg || {}; const passo = d => semDomingo(d);
+  let d, rot;
+  if(c.modo==="24h"){ d = passo(addDays(t,1)); rot = d===addDays(t,1) ? `até amanhã (${br(d)})` : `até ${br(d)}`; }
+  else if(c.modo==="sexta"){ const dow = parse(t).getDay(); d = addDays(t, ((5 - dow + 7) % 7) || (dow===5 ? 0 : 7)); rot = d===t ? `até hoje, sexta (${br(d)}), às 18h` : `até sexta (${br(d)})`; }
+  else if(c.modo==="data" && c.data && c.data>=t){ d = c.data; rot = `até ${br(d)}`; }
+  else { d = passo(addDays(t,2)); rot = `até ${br(d)}`; }
+  if(c.usarReal!==false){
+    if(BF_TURMA_NOV>=t && BF_TURMA_NOV<=d){ d = BF_TURMA_NOV; rot = `até ${br(d)}, quando fecha a turma de novembro`; }
+    else if(BF_FIM>=t && BF_FIM<=d){ d = BF_FIM; rot = `até ${br(d)}, último dia da Black Friday`; }
+  }
+  if(d > BF_FIM){ d = BF_FIM; rot = `até ${br(d)}, último dia da Black Friday`; }
+  return {data:d, texto:rot};
+}
+function taxaHTML(l){
+  const e = taxaEscada(l); if(!e || !bfAtivo()) return "";
+  const nm = firstName(l.nome) ? `${firstName(l.nome)}, ` : "", pz = prazoTaxa();
+  const msgs = [
+    ["Taxa cheia", e.cheia, `${nm}para garantir a sua vaga com a condição da Black, a taxa de adesão é de ${fmtR(e.cheia)}, e a mensalidade fica com o valor promocional pelo curso inteiro. Posso te mandar o link?`],
+    [`Condição especial até ${br(pz.data)}`, e.meio, `${nm}consegui uma condição especial para você: se garantir a sua vaga ${pz.texto}, a taxa de adesão fica em ${fmtR(e.meio)} em vez de ${fmtR(e.cheia)}. Vamos fechar?`],
+    ["Última condição (mínima)", e.minima, `${nm}consegui liberar uma última condição para você: taxa de adesão de ${fmtR(e.minima)} se você fechar ${pz.texto}. É o menor valor possível. Te mando o link?`]];
+  return `<details class="msg"><summary>💰 Negociação da taxa de adesão: ${fmtR(e.cheia)} → ${fmtR(e.meio)} → ${fmtR(e.minima)}</summary>
+    <div class="rot">Prazo de hoje: <b>${esc(pz.texto)}</b>. Comece pela taxa cheia. Se a pessoa hesitar, desça como <b>condição especial com prazo</b> e cumpra o prazo. A mínima é a última carta: só use se for perder a matrícula.</div>
+    <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:6px">${msgs.map(([t,v,txt])=>`<a class="btn" href="${esc(waLink(l, txt))}" target="_blank" rel="noopener">${esc(t)} · ${fmtR(v)}</a>`).join("")}</div></details>`;
+}
+function ofertaBF(curso, mod){
+  const lista = "a mensalidade fica a partir de R$ 149,00 nos cursos EAD e semipresenciais participantes, e esse valor vale para o curso inteiro.";
+  const p = precoBF(curso); if(!curso || !p) return lista;
+  let e = p.ead, sm = p.semi;
+  if(mod==="EAD" && e) sm = null; if(mod==="Semipresencial" && sm) e = null;
+  if(e && sm && e!==sm) return `no curso de ${curso} a mensalidade fica em ${reais(e)} no EAD ou ${reais(sm)} no semipresencial, e esse valor vale para o curso inteiro.`;
+  if(e && sm) return `no curso de ${curso} a mensalidade fica em ${reais(e)}, no EAD ou no semipresencial, e esse valor vale para o curso inteiro.`;
+  return `no curso de ${curso} (${e ? "EAD" : "semipresencial"}) a mensalidade fica em ${reais(e || sm)}, e esse valor vale para o curso inteiro.`;
+}
+// Sugere o(s) curso(s) da lista para um texto digitado à mão ("Pedagogia e Adm" -> Pedagogia + Administração).
+const VAGOS = ["nao informado","nao aparece","nao me recordo","na duvida","nao sei","indeciso","indefinido","qualquer"];
+const APELIDOS = {"adm":"Administração","administracao":"Administração","rh":"Gestão de Recursos Humanos","ads":"Análise e Desenvolvimento de Sistemas","ti":"Gestão da Tecnologia da Informação","ed fisica":"Educação Física (Licenciatura)","educacao fisica":"Educação Física (Licenciatura)","psico":"Psicopedagogia","interiores":"Design de Interiores","design g":"Design Gráfico","design g.":"Design Gráfico","contabeis":"Ciências Contábeis","contabilidade":"Ciências Contábeis","estetica":"Estética e Cosmética"};
+function cursoDeTexto(t){ const n = norm(t).replace(/[.]/g,"").trim(); if(!n) return "";
+  const exato = CURSOS.find(c=>norm(c)===n); if(exato) return exato;
+  if(APELIDOS[n] && CURSOS.includes(APELIDOS[n])) return APELIDOS[n];
+  const cont = CURSOS.filter(c=>norm(c).includes(n) || n.includes(norm(c))); if(cont.length===1) return cont[0];
+  const pal = CURSOS.filter(c=>norm(c).split(" ").some(w=>w.length>3 && n.split(" ").includes(w))); return pal.length===1 ? pal[0] : ""; }
+function sugerirCursos(txt){
+  const n = norm(txt); if(VAGOS.some(v=>n.includes(v))) return ["__nao"];
+  const exato = CURSOS.find(c=>norm(c)===norm(txt)); if(exato) return [exato];
+  // "Gestão de Segurança Privada ou Pública": completa a segunda parte com o começo da primeira
+  const partes = String(txt).split(/\s+(?:ou|e|\/)\s+|\s*\/\s*/i).map(x=>x.trim()).filter(Boolean);
+  if(partes.length>=2){ let a = cursoDeTexto(partes[0]), b = cursoDeTexto(partes[1]);
+    if(a && !b){ const base = partes[0].split(/\s+/).slice(0,-1).join(" "); b = cursoDeTexto(base + " " + partes[1]); }
+    if(a || b) return [a||b, a && b && a!==b ? b : ""]; }
+  return [cursoDeTexto(txt) || ""];
+}
+const cursoTxt = l => l.curso ? (l.curso2 ? `${l.curso} ou ${l.curso2}` : l.curso) : "";
+function ofertaBF2(l){ const a = ofertaBF(l.curso, l.modalidade); if(!l.curso2) return a; const b = ofertaBF(l.curso2, l.modalidade);
+  if(a.startsWith("a mensalidade") || b.startsWith("a mensalidade")) return ofertaBF("", l.modalidade);
+  return a.replace(/, e esse valor vale para o curso inteiro\.$/,"") + "; e " + b; }
+const bfAtivo = () => today() <= BF_FIM;
+// Black Friday: lead reativado (bfPasso 0..2) recebe bf_1, bf_2, bf_3; lead que já estava na fila recebe bf_1 uma vez como próximo contato.
+const bfKey = l => { if(!bfAtivo() || ["matriculado","naoquer","semmedio","agendado"].includes(l.etapa)) return null;
+  if(l.bfPasso!=null && l.bfPasso<3) return "bf_"+(l.bfPasso+1);
+  if(!l.bfFeito && l.bfPasso==null && l.etapa==="novo" && (l.tentativas||0)>0) return "bf_1";
+  if(!l.bfFeito && l.bfPasso==null && (l.etapa==="negociando" || l.etapa==="informado")) return "bf_atend";
+  return null; };
+const IND_MSG = "Oi, {nome}! Tudo bem com as aulas? 😊 Começou a Black Friday da UniFECAF: até 30/11, quem entra paga mensalidade a partir de R$ 149,00, e esse valor vale para o curso inteiro. Você conhece alguém que quer fazer faculdade? Me passa o nome e o WhatsApp que eu cuido com o mesmo carinho que cuidei de você.\n---\nOi, {nome}! Uma ajuda rápida: na Black Friday da UniFECAF a mensalidade fica a partir de R$ 149,00 para o curso inteiro, só para matrículas até 30/11. Tem algum amigo, colega ou parente pensando em faculdade? Me manda o contato que eu chamo com todo cuidado 😊";
+const BF_MSG = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Chegou a Black Friday UniFECAF 🖤\nSó para matrículas feitas até 30/11, {ofertaBF}\nDá para entrar na {turmasBF}. Quer que eu garanta a sua vaga?\n---\n{nome}, a Black Friday da UniFECAF começou e lembrei de você 🖤 Até 30/11, {ofertaBF}\nPosso te explicar como funciona?";
 const CAMP_DEFAULT = "Oi, {nome}! Tudo bem? Aqui é a {responsavel}, do polo UniFECAF. Abrimos uma condição especial de matrícula para o curso de {curso} e lembrei de você. Quer que eu te passe os detalhes?";
 const campSit = new Set(["frio","perdido"]), campMot = new Set();
 // Público da campanha. Matriculados (não podem usar promoções de ingresso), quem pediu para não ser chamado e quem não terminou o ensino médio nunca entram.
-const CAMP_PUBS = [["fria","Lista fria"],["base","Toda a base que ainda não matriculou"],["semresp","Ainda não responderam"],["atend","Em atendimento"],["agendado","Pediram para chamar depois"]];
+const CAMP_PUBS = [["indic","🎁 Alunos matriculados (pedir indicação)"],["fria","Lista fria"],["base","Toda a base que ainda não matriculou"],["semresp","Ainda não responderam"],["atend","Em atendimento"],["agendado","Pediram para chamar depois"]];
 let campPub = "fria";
 try{ campPub = localStorage.getItem("campPub") || "fria"; }catch(e){}
 function campPubOk(l){
+  if(campPub==="indic") return l.etapa==="matriculado";
   if(["matriculado","naoquer","semmedio"].includes(l.etapa)) return false;
   if(campPub==="base") return true;
   if(campPub==="semresp") return l.etapa==="novo";
@@ -501,6 +589,7 @@ const brAno = s => { const d = parse(s); return `${pad(d.getDate())}/${pad(d.get
 const DOW = ["dom","seg","ter","qua","qui","sex","sáb"];
 const brLong = s => `${DOW[parse(s).getDay()]}, ${br(s)}`;
 const maxDate = (a,b) => a > b ? a : b;
+const minDate = (a,b) => a < b ? a : b;
 
 /* ---------- util ---------- */
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -608,7 +697,8 @@ function rotKey(l){
   if(["novo","informado"].includes(l.etapa) && tpl.rot_novo) return "rot_novo";
   return null;
 }
-function tplKey(l){ if(l.etapa==="matriculado") return l.posAtual==="pos_d7" ? "pos_semana" : l.posAtual==="pos_indic" ? "pos_indic" : null;
+function tplKey(l){ { const b = bfKey(l); if(b && tpl[b]) return b; }
+  if(l.etapa==="matriculado") return l.posAtual==="pos_d7" ? "pos_semana" : l.posAtual==="pos_indic" ? "pos_indic" : null;
   if(l.etapa==="negociando" && (!l.objecao || l.objecao==="conversando")){
     if((l.acoes||[]).includes("visitou") && tpl.visitou) return "visitou";
     if(l.temperatura==="quente" && tpl.temp_quente) return "temp_quente";
@@ -626,7 +716,8 @@ function provaSocial(){ const n = leads.filter(l=>l.etapa==="matriculado" && mat
 function variacao(t, l, k){ let partes = String(t).split(/\n\s*---\s*\n/).map(x=>x.trim()).filter(Boolean);
   partes = partes.filter(x=>(!x.includes("{inicioTurma}") || prazoOk(prazos.inicioTurma)) && (!x.includes("{prazoCondicao}") || prazoOk(prazos.prazoCondicao)));
   if(partes.length<2) return partes[0] || "";
-  if(k==="negociando" || /^obj_/.test(k||"") || /^temp_/.test(k||"") || k==="visitou"){ const n = partes.length, t = l.tentativas||0;   // em ordem: cada tentativa usa uma estratégia diferente
+  if(/^bf_/.test(k||"")) return partes[hashStr(l.id) % partes.length];
+  if(k==="negociando" || k==="link" || /^obj_/.test(k||"") || /^temp_/.test(k||"") || k==="visitou"){ const n = partes.length, t = l.tentativas||0;   // em ordem: cada tentativa usa uma estratégia diferente
     return partes[t < n ? t : 1 + (t - n) % (n - 1)]; }
   if(k==="rot") return partes[(l.tentativas||0) % partes.length];
   if(k==="novo_retorno"){ const n = partes.length, c = Math.min(Math.max((l.ciclos||1),1), RODIZIO.length) - 1, tt = Math.min(Math.max(l.tentativas||1,1), 2);
@@ -636,13 +727,14 @@ function fillTpl(l){
   const k = tplKey(l); const t = k ? variacao(tpl[k] || "", l, k) : "";
   const f = firstDue(l);
   return trocaNome(t, l.nome)
-          .replaceAll("{curso}", l.curso || "graduação")
+          .replaceAll("{curso}", cursoTxt(l) || "graduação")
           .replaceAll("{responsavel}", firstName(l.responsavel || meuNome()) || "equipe")
           .replaceAll("{motivo}", l.pedidoMotivo || "para retomarmos a conversa sobre a matrícula")
           .replaceAll("{vencimento}", f ? br(f) : "breve")
           .replaceAll("{inicio}", l.inicioAulas ? br(l.inicioAulas) : "em breve")
           .replaceAll("{resumo}", l.resumo || "")
-          .replaceAll("{ofertaBF}", ofertaBF(l.curso, l.modalidade))
+          .replaceAll("{ofertaBF}", ofertaBF2(l))
+          .replaceAll("{turmasBF}", turmasBF())
           .replaceAll("{provasocial}", provaSocial())
           .replaceAll("{inicioTurma}", prazos.inicioTurma ? br(prazos.inicioTurma) : "breve")
           .replaceAll("{prazoCondicao}", prazos.prazoCondicao ? br(prazos.prazoCondicao) : "o fim do mês");
@@ -656,7 +748,7 @@ function status(l){
     return {cls:"idle", txt: l.ultimoEnvio ? `Enviado em ${br(l.ultimoEnvio)} · aguardando` : "Sem follow-up agendado"};
   }
   const d = diff(l.proximo, today());
-  if(l.etapa==="informado" && l.retornoHora && d>=0){
+  if(RETORNO_HORA.includes(l.etapa) && l.retornoHora && d>=0){
     if(d===0) return aguardaHora(l) ? {cls:"future", txt:`Voltar hoje às ${l.retornoHora}`} : {cls:"today", txt:`Voltar agora · combinado ${l.retornoHora}`};
     return {cls:"future", txt:`${d===1 ? "Amanhã" : br(l.proximo)} às ${l.retornoHora}`};
   }
@@ -768,6 +860,7 @@ function cardHTML(l, full){
     `<span class="pill stage">${esc(stage.label)}</span>`];
   if(l.etapa==="matriculado" && !l.primeiroBoleto) pills.push(`<span class="pill risk">Falta data do 1º boleto</span>`);
   if(l.etapa==="matriculado" && !l.inicioAulas) pills.push(`<span class="pill today">Falta início das aulas</span>`);
+  if(l.bfPasso!=null && l.bfPasso<3 && bfAtivo()) pills.push(`<span class="pill" style="background:#111;color:#fff">🖤 Black ${l.bfPasso+1} de 3</span>`);
   if(l.temperatura && ["negociando","informado"].includes(l.etapa)) pills.push(`<span class="pill ${l.temperatura==="quente"?"risk":l.temperatura==="frio"?"muted":"today"}">${esc(tempLabel(l.temperatura))}</span>`);
   if(l.risco) pills.push(`<span class="pill risk">${l.riscoAvisado ? "Em risco · Permanência avisada" : "Em risco · avisar Permanência"}</span>`);
   if(isPool(l) && l.filaDe) pills.push(`<span class="pill owner" style="--c:var(--p${ownerColor(l.filaDe)})">Fila: ${esc(l.filaDe)}</span>`);
@@ -797,7 +890,8 @@ function cardHTML(l, full){
       <div class="row"><button class="btn primary" type="button" data-act="stage-ok">Confirmar</button><button class="btn ghost" type="button" data-act="stage-no">Cancelar</button></div></div>` : "";
 
   const respondBtn = isPool(l) ? `<button class="btn" type="button" data-act="pegar" style="border-color:var(--accent);color:var(--accent)">Respondeu: é minha</button>` : l.etapa==="matriculado" ? (!l.risco && !isPerm() ? `<button class="btn ghost danger" type="button" data-act="risco">Aluno com problema: avisar Permanência</button>` : "")
-    : l.etapa==="negociando" || l.etapa==="informado" ? (isPerm() ? "" : `<button class="btn" type="button" data-act="ctx" style="border-color:var(--accent);color:var(--accent)">Registrar conversa</button>` + (l.etapa==="negociando" ? `<button class="btn" type="button" data-act="infos" style="border-color:var(--accent);color:var(--accent)">Enviei as informações, não respondeu</button>` : ""))
+    : l.etapa==="negociando" || l.etapa==="informado" ? (isPerm() ? "" : `<button class="btn" type="button" data-act="ctx" style="border-color:var(--accent);color:var(--accent)">Registrar conversa</button>` + (l.etapa==="negociando" ? `<button class="btn" type="button" data-act="infos" style="border-color:var(--accent);color:var(--accent)">Enviei as informações, não respondeu</button>` : "") + `<button class="btn" type="button" data-act="link" style="border-color:var(--today);color:var(--today)">💳 Mandei o link da matrícula</button>`)
+    : l.etapa==="linkenviado" ? (isPerm() ? "" : `<button class="btn" type="button" data-act="ctx" style="border-color:var(--accent);color:var(--accent)">Registrar conversa</button>`)
     : (stage.retry || l.etapa==="frio" || l.etapa==="perdido") ? `<button class="btn" type="button" data-act="respondeu" style="border-color:var(--accent);color:var(--accent)">Respondeu</button>` : "";
 
   const dateBox = pendingDate.has(l.id) ? `<div class="stagebox"><b>Reagendar para</b>
@@ -808,6 +902,7 @@ function cardHTML(l, full){
         <label class="f">Nome<input type="text" id="ed-nome-${id}" value="${esc(temNome(l.nome) ? l.nome : "")}" placeholder="Ainda não sabemos"></label>
         <label class="f">WhatsApp*<input type="tel" id="ed-tel-${id}" value="${esc(l.telefone)}"></label>
         <label class="f">Curso${cursoSel(`ed-curso-${id}`, l.curso)}</label>
+        <label class="f">2º curso (se está entre dois)${cursoSel(`ed-curso2-${id}`, l.curso2)}</label>
         <label class="f">Indicado por (aluno)<input type="text" id="ed-ind-${id}" list="alunosList" autocomplete="off" value="${esc(l.indicadoPor||"")}"></label>
         <label class="row" style="font-size:.88rem;font-weight:600;align-self:end"><input type="checkbox" id="ed-antigo-${id}"${l.antigo?" checked":""}> Lead antigo</label>
         <label class="f">Origem<select id="ed-origem-${id}"><option value="">Não sei ainda</option>${ORIGENS.map(o=>`<option${o===l.origem?" selected":""}>${esc(o)}</option>`).join("")}</select></label>
@@ -822,7 +917,7 @@ function cardHTML(l, full){
   return `<article class="card ${st.cls}" data-id="${id}">
     <div class="top">
       <div class="who"><h3>${full ? (temNome(l.nome) ? esc(l.nome) : `<span style="color:var(--muted)">Sem nome</span>`) : `<button type="button" class="nome" data-ficha="${id}" title="Abrir ficha">${temNome(l.nome) ? esc(l.nome) : `<span style="color:var(--muted)">Sem nome</span>`}</button>`}</h3>
-        <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}${l.modalidade?` · ${esc(l.modalidade)}`:""}</span>`:""}${l.origem?`<span>${deRua(l) ? `<b style="color:var(--today)">🚩 Ação de rua${l.acaoRua?` · ${esc(l.acaoRua)}`:""}</b>` : `via ${esc(l.origem)}`}</span>`:""}${l.indicadoPor?`<span>indicado por ${esc(l.indicadoPor)}</span>`:""}</div></div>
+        <div class="meta"><span class="tel">${esc(phoneFmt(l.telefone))}</span>${l.curso?`<span>${esc(l.curso)}${l.curso2?` <b>ou</b> ${esc(l.curso2)}`:""}${l.modalidade?` · ${esc(l.modalidade)}`:""}</span>`:""}${l.origem?`<span>${deRua(l) ? `<b style="color:var(--today)">🚩 Ação de rua${l.acaoRua?` · ${esc(l.acaoRua)}`:""}</b>` : `via ${esc(l.origem)}`}</span>`:""}${l.indicadoPor?`<span>indicado por ${esc(l.indicadoPor)}</span>`:""}</div></div>
       <div class="pills">${pills.join("")}</div>
     </div>
     ${l.proxPasso && ["negociando","informado","agendado"].includes(l.etapa) ? `<div class="ctx" style="border-left:4px solid var(--accent)"><span><b>➡️ Próximo passo:</b> ${esc(l.proxPasso)}</span>${(l.acoes||[]).length ? `<span class="note" style="margin:0">Na última conversa: ${esc(l.acoes.map(acaoLabel).join(" · "))}</span>` : ""}</div>` : ""}
@@ -830,6 +925,8 @@ function cardHTML(l, full){
     ${info.length?`<div class="info">${info.join("")}</div>`:""}
     ${canMsg && podeMexer(l)?`<details class="msg"${st.cls==="late"||st.cls==="today"?" open":""}><summary>Mensagem pronta${l.etapa==="matriculado"&&l.posAtual?` · ${esc(POS.find(p=>p.k===l.posAtual).label)}`:""}</summary>
       <textarea id="msg-${id}" data-draft="${id}">${esc(text)}</textarea></details>`:""}
+    ${["negociando","informado","linkenviado"].includes(l.etapa) && podeMexer(l) && !isPerm() ? taxaHTML(l) : ""}
+    ${(l.temperatura==="quente" && ["negociando","informado"].includes(l.etapa) || l.etapa==="linkenviado") && podeMexer(l) && tpl.rot_ligacao ? `<details class="msg"><summary>📞 Roteiro de ligação (3 minutos para fechar)</summary><div class="rot">${esc(trocaNome(tpl.rot_ligacao, l.nome).replaceAll("{curso}", cursoTxt(l) || "o curso")).replace(/\n/g,"<br>")}</div></details>` : ""}
     ${l.ultimaMsg && l.ultimaMsg.texto && l.etapa!=="matriculado" ? `<details class="msg"><summary>Última mensagem enviada · ${br(l.ultimaMsg.data)}${l.ultimaMsg.por?` · ${esc(firstName(l.ultimaMsg.por))}`:""}</summary><div class="rot">${esc(l.ultimaMsg.texto).replace(/\n/g,"<br>")}</div></details>` : ""}
     ${rotKey(l) && podeMexer(l) ? `<details class="msg"><summary>Roteiro do áudio · ${esc(rotKey(l)==="rot_novo" ? "primeiro contato" : objLabel(l.objecao))}</summary><div class="rot">${esc(variacao(tpl[rotKey(l)]||"", l, "rot")).replace(/\n/g,"<br>")}</div></details>` : ""}
     ${l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l) && !pendingEdit.has(l.id) ? `<div class="stagebox"><b>Falta a data do 1º boleto</b>
@@ -844,6 +941,7 @@ function cardHTML(l, full){
       ${canMsg?`<a class="btn primary" data-wa="${id}" href="${esc(waLink(l,text))}" target="_blank" rel="noopener">Abrir no WhatsApp</a>
       <button class="btn" type="button" data-act="enviado">Marcar como enviada</button>`:
       (l.etapa!=="naoquer"?`<a class="btn" href="${esc(`https://wa.me/${phoneDigits(l.telefone)}`)}" target="_blank" rel="noopener">WhatsApp</a>`:"")}
+      ${["negociando","informado","linkenviado"].includes(l.etapa) && !isPerm() ? `<a class="btn" href="tel:+${phoneDigits(l.telefone)}" style="${l.temperatura==="quente"||l.etapa==="linkenviado" ? "border-color:var(--late);color:var(--late);font-weight:700" : ""}">📞 Ligar</a>` : ""}
       ${respondBtn}
       ${l.risco && !l.riscoAvisado ? `<button class="btn danger" type="button" data-act="avisei">${isPerm() ? "Assumi o caso" : "Avisei a Permanência"}</button>` : ""}
       ${isPerm() ? `<button class="btn ghost" type="button" data-act="nota">Anotar</button>` : `<details class="mais"><summary class="btn ghost">Mais opções</summary><div class="mais-box">
@@ -896,7 +994,7 @@ let fromSnap = false;
 function renderSnap(){ fromSnap = true; try{ render(); } finally { fromSnap = false; } }
 let infoProntos = null;
 setInterval(()=>{ try{
-  const k = leads.filter(l=>l.etapa==="informado" && l.retornoHora && l.proximo===today() && !aguardaHora(l)).map(l=>l.id).join(",");
+  const k = leads.filter(l=>RETORNO_HORA.includes(l.etapa) && l.retornoHora && l.proximo===today() && !aguardaHora(l)).map(l=>l.id).join(",");
   if(infoProntos!==null && k!==infoProntos && tab==="hoje" && !document.querySelector("input:focus,textarea:focus,select:focus")) render();
   infoProntos = k;
 }catch(e){} }, 60000);
@@ -908,7 +1006,8 @@ function render(){
   document.body.classList.toggle("modo-foco", focoAtivo && tab==="hoje");
   renderFicha();
   const t = today(); const L = mine().filter(l=>l.responsavel || (isPool(l) && l.filaDe)); const pool = leads.filter(isPool);
-  const quenteP = l => l.temperatura==="quente" && ["negociando","informado"].includes(l.etapa) ? 0 : 1;
+  // ordem da fila: quentes, depois lead novo que ainda não recebeu nada (quanto antes, mais chance de resposta), depois o resto
+  const quenteP = l => l.etapa==="linkenviado" ? -1 : l.temperatura==="quente" && ["negociando","informado"].includes(l.etapa) ? 0 : (l.etapa==="novo" && !(l.tentativas||0) && !l.ultimoEnvio) ? 1 : 2;
   const due = L.filter(l=>l.proximo && l.proximo<=t && !aguardaHora(l)).sort((x,y)=>quenteP(x)-quenteP(y) || x.proximo.localeCompare(y.proximo)||String(x.nome).localeCompare(y.nome));
   const fut = L.filter(l=>l.proximo && l.proximo>t).sort((x,y)=>x.proximo.localeCompare(y.proximo));
   const alunos = L.filter(l=>l.etapa==="matriculado");
@@ -929,6 +1028,7 @@ function render(){
     const falta = Math.max(0, meta-feitas), du = diasUteisRestantes();
     document.getElementById("metaStrip").innerHTML = `<div class="l1"><span><b>${resp==="todas"?"Equipe":esc(resp)} · ${mesNome()}:</b> ${feitas} de ${meta} matrículas (${pct(feitas,meta)}) · <b style="color:var(--today)">🚩 ${rua} de ação de rua</b> <span class="note" style="margin:0">(comissão em dobro)</span></span>
       <span>${falta===0 ? "Meta batida" : `Faltam ${falta} · ${du ? num1(falta/du)+" por dia útil" : "mês encerrado"}`}</span></div>
+      ${resp!=="todas" ? `<div class="l1" style="font-size:.85rem;flex-wrap:wrap"><span>${ativLinha(resp)}</span></div>` : ""}
       ${falta>0 && du ? `<div class="l1" style="font-size:.85rem"><span><b>Esta semana:</b> ${daSemana} de ${porSemana} ${daSemana>=porSemana ? "✅ semana batida" : `· faltam ${porSemana-daSemana} até domingo`}</span><span class="note" style="margin:0">ritmo para fechar o mês: ${porSemana} por semana</span></div>` : ""}
       <div class="track"><div class="fill" style="width:${Math.min(100, meta ? Math.round(feitas*100/meta) : 0)}%"></div></div>`; }
   document.getElementById("nHoje").textContent = due.length||"";
@@ -996,7 +1096,7 @@ function render(){
       return;
     }
     const semBolH = isPerm() ? 0 : L.filter(l=>l.etapa==="matriculado" && !l.primeiroBoleto && podeMexer(l)).length;
-    list.innerHTML = faltaHTML(L, t) + quentesHTML(L, t) + nomesForaHTML() + atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
+    list.innerHTML = faltaHTML(L, t) + linksHTML(L, t) + quentesHTML(L, t) + nomesForaHTML() + atrasadosHTML(L, t) + (semBolH ? `<div class="warn"><span><b>${semBolH} aluno(s) seu(s) sem a data do 1º boleto.</b> É obrigatória. <button class="btn" type="button" onclick="document.querySelector('.tab[data-tab=pos]').click()">Preencher agora</button></span></div>` : "") + (due.length ? `<div class="row" style="justify-content:space-between"><span class="note"><b>${due.length}</b> contato(s) para hoje</span><button class="btn primary" type="button" id="focoEntrar">Modo foco: um lead por vez</button></div>` : "") + (due.length ? pag(due) :
       (leads.length ? emptyHTML("Nada pendente para hoje","Todos os contatos do dia foram feitos. Veja a Agenda para os próximos.")
                     : emptyHTML("Nenhum lead cadastrado ainda","Clique em <b>+ Novo lead</b>. O painel agenda os próximos contatos sozinho, inclusive a régua depois da matrícula.")));
     const tarde = L.filter(aguardaHora).sort((x,y)=>x.retornoHora.localeCompare(y.retornoHora));
@@ -1162,6 +1262,36 @@ function rankRange(){ const t = today();
   if(rankPer==="semana"){ const dow = (parse(t).getDay()+6)%7; return [addDays(t,-dow), t]; }
   return [mesKey()+"-01", t]; }
 const ATEND = /enviad|respondeu|retomado/;
+// Atividade do dia por vendedora (meta diária configurável em Configurações → Metas).
+const ATIV_PADRAO = {msgs:60, conv:10, links:2};
+const metaAtiv = () => ({...ATIV_PADRAO, ...((metas && metas._atividade) || {})});
+function atividade(n, dia){
+  dia = dia || today(); let msgs = 0, links = 0, conv = 0;
+  for(const l of leads){
+    for(const h of (l.historico||[])){ if(h.data!==dia || h.por!==n) continue;
+      if(/link da matrícula enviado/.test(h.acao)) links++;
+      else if(/enviad|retomado/.test(h.acao)) msgs++; }
+    if(l.resumoEm===dia && l.resumoPor===n) conv++;
+  }
+  const mats = leads.filter(l=>l.etapa==="matriculado" && credito(l)===n && matDate(l)===dia).length;
+  return {msgs, conv, links, mats};
+}
+// Resumo da reunião das 8h (administradora): ontem, hoje e mês por vendedora.
+function diaAnterior(){ let d = addDays(today(), -1); if(parse(d).getDay()===0) d = addDays(d, -1); return d; }
+function resumoReuniao(){
+  const t = today(), ont = diaAnterior(), mm = metas[mesKey()] || {};
+  return equipe.map(n=>{ const a = atividade(n, ont); const meus = leads.filter(l=>donaDe(l)===n);
+    const doMes = leads.filter(l=>l.etapa==="matriculado" && credito(l)===n && matDate(l).slice(0,7)===mesKey());
+    return {n, ont:a, fila: meus.filter(l=>l.proximo && l.proximo<=t).length, quentes: meus.filter(l=>l.temperatura==="quente" && ["negociando","informado"].includes(l.etapa)).length,
+      links: meus.filter(l=>l.etapa==="linkenviado").length, atras: meus.filter(l=>l.proximo && l.proximo<t).length,
+      mes: doMes.length, rua: doMes.filter(deRua).length, meta: Number(mm[n]) || META_PADRAO}; });
+}
+function reuniaoTexto(){ const r = resumoReuniao(), ont = diaAnterior();
+  return `*Reunião ${br(today())}* 🔥\n` + r.map(x=>`\n*${x.n}*\nOntem (${br(ont)}): ${x.ont.msgs} mensagens · ${x.ont.conv} conversas · ${x.ont.links} links · ${x.ont.mats} matrícula(s)\nHoje: ${x.fila} na fila · ${x.quentes} quentes · ${x.links} links sem pagamento${x.atras?` · ${x.atras} atrasados`:""}\nMês: ${x.mes}/${x.meta} matrículas · 🚩 ${x.rua} de rua`).join("\n");
+}
+function ativBarra(v, meta){ const p = meta ? Math.min(100, Math.round(v*100/meta)) : 0; return `<span class="mini" style="width:60px"><i style="width:${p}%;${p>=100?"background:var(--accent)":p<40?"background:var(--late)":""}"></i></span>`; }
+function ativLinha(n){ const a = atividade(n), m = metaAtiv();
+  return `<b>Hoje:</b> ${a.msgs}/${m.msgs} mensagens ${ativBarra(a.msgs,m.msgs)} · ${a.conv}/${m.conv} conversas ${ativBarra(a.conv,m.conv)} · ${a.links}/${m.links} links 💳 ${ativBarra(a.links,m.links)}${a.mats?` · <b>${a.mats} matrícula(s) hoje 🎉</b>`:""}`; }
 function renderInicio(){
   const el = document.getElementById("inicio"); const [ini,fim] = rankRange(); const t = today();
   const inP = s => s && String(s).slice(0,10)>=ini && String(s).slice(0,10)<=fim;
@@ -1182,7 +1312,18 @@ function renderInicio(){
   const top = rows.slice(0,3);
   const precisaBackup = podeGerir() && backupInfo && backupInfo.ultimoMes !== mesKey() && leads.length;
   const naoLidos = recadosNaoLidos();
-  el.innerHTML = quentesHTML(podeGerir() && resp==="todas" ? leads : mine(), t) + (naoLidos.length ? `<div class="warn" style="background:var(--calm-soft);color:var(--calm)"><span><b>${naoLidos.length} recado(s) novo(s) da Isabella:</b> ${esc(naoLidos[0].titulo || "")}</span><button class="btn primary" type="button" id="btnVerRec">Ler agora</button></div>` : "") + (precisaBackup ? `<div class="warn"><span><b>Backup de ${mesNome()}:</b> baixe a planilha com todos os leads e guarde no seu computador ou Drive.${backupInfo.ultimoEm ? ` Último backup em ${brAno(backupInfo.ultimoEm)}.` : ""}</span><button class="btn primary" type="button" id="btnBackup">Baixar backup agora</button></div>` : "") + `
+  const ativHTML = !podeGerir() ? "" : (()=>{ const m = metaAtiv(); const hr = new Date().getHours();
+    const rows = equipe.map(n=>({n, ...atividade(n)})).sort((a,b)=>b.msgs-a.msgs);
+    return `<section class="panel"><h3 class="sec">Atividade de hoje, ao vivo</h3>
+      <p class="tplhelp">Meta do dia por vendedora: ${m.msgs} mensagens, ${m.conv} conversas registradas, ${m.links} links de matrícula. ${hr>=15 ? "Já passou das 15h: quem está abaixo de 50% precisa acelerar." : ""}</p>
+      <div class="tblwrap"><table class="rank"><thead><tr><th>Vendedora</th><th>Mensagens</th><th>Conversas</th><th>💳 Links</th><th>Matrículas hoje</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr><td>${esc(r.n)}</td><td>${r.msgs}/${m.msgs} ${ativBarra(r.msgs,m.msgs)}</td><td>${r.conv}/${m.conv} ${ativBarra(r.conv,m.conv)}</td><td>${r.links}/${m.links} ${ativBarra(r.links,m.links)}</td><td><b>${r.mats}</b></td></tr>`).join("")}</tbody></table></div></section>`; })();
+  const reuniaoHTML = !podeGerir() ? "" : (()=>{ const r = resumoReuniao(), ont = diaAnterior(); const cedo = new Date().getHours() < 11;
+    return `<details class="panel"${cedo?" open":""}><summary style="cursor:pointer;font-weight:700">☀️ Resumo para a reunião das 8h</summary>
+      <div class="tblwrap" style="margin-top:8px"><table class="rank"><thead><tr><th>Vendedora</th><th>Ontem (${br(ont)}) msgs · conv · links · matr.</th><th>Hoje: fila</th><th>🔥 Quentes</th><th>💳 Links</th><th>Atrasados</th><th>Mês</th><th>🚩 Rua</th></tr></thead><tbody>
+      ${r.map(x=>`<tr><td>${esc(x.n)}</td><td>${x.ont.msgs} · ${x.ont.conv} · ${x.ont.links} · <b>${x.ont.mats}</b></td><td>${x.fila}</td><td>${x.quentes}</td><td>${x.links}</td><td>${x.atras ? `<span style="color:var(--late);font-weight:600">${x.atras}</span>` : 0}</td><td><b>${x.mes}</b>/${x.meta}</td><td>${x.rua}</td></tr>`).join("")}</tbody></table></div>
+      <div class="row" style="margin-top:8px"><button class="btn primary" type="button" id="copiaReuniao">Copiar resumo para o WhatsApp</button></div></details>`; })();
+  el.innerHTML = reuniaoHTML + ativHTML + linksHTML(podeGerir() && resp==="todas" ? leads : mine(), t) + quentesHTML(podeGerir() && resp==="todas" ? leads : mine(), t) + (naoLidos.length ? `<div class="warn" style="background:var(--calm-soft);color:var(--calm)"><span><b>${naoLidos.length} recado(s) novo(s) da Isabella:</b> ${esc(naoLidos[0].titulo || "")}</span><button class="btn primary" type="button" id="btnVerRec">Ler agora</button></div>` : "") + (precisaBackup ? `<div class="warn"><span><b>Backup de ${mesNome()}:</b> baixe a planilha com todos os leads e guarde no seu computador ou Drive.${backupInfo.ultimoEm ? ` Último backup em ${brAno(backupInfo.ultimoEm)}.` : ""}</span><button class="btn primary" type="button" id="btnBackup">Baixar backup agora</button></div>` : "") + `
     <div class="row" style="justify-content:space-between">
       <h3 class="sec">Ranking · ${RANK_PER[rankPer]}</h3>
       <div class="chips">${Object.entries(RANK_PER).map(([k,v])=>`<button type="button" class="chip" data-rper="${k}" aria-pressed="${k===rankPer}">${v}</button>`).join("")}</div>
@@ -1350,6 +1491,10 @@ function guiaHTML(){
 function irPara(t){ tab = t; document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected", x.dataset.tab===t)); render(); window.scrollTo(0,0); }
 let rankVer = null;
 document.getElementById("inicio").addEventListener("click", e=>{
+  if(e.target.id==="copiaReuniao"){ const txt = reuniaoTexto();
+    const ok = () => toast("Resumo copiado. Cole no grupo do WhatsApp");
+    if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, ()=>prompt("Copie o resumo:", txt));
+    else prompt("Copie o resumo:", txt); return; }
   const rk = e.target.closest("[data-rkmat]"); if(rk){ rankVer = rankVer===rk.dataset.rkmat ? null : rk.dataset.rkmat; renderInicio(); return; }
   const fi = e.target.closest("[data-fichaini]"); if(fi){ fichaId = fi.dataset.fichaini; render(); return; }
   if(e.target.id==="btnBackup"){ exportarLeads(); return; } if(e.target.id==="btnVerRec"){ irPara("recados"); return; } const b = e.target.closest("[data-rper]"); if(b){ rankPer = b.dataset.rper; renderInicio(); } });
@@ -1417,7 +1562,7 @@ function renderNumeros(){
     </section>`;
   const ultimaAcao = l => { let d = String(l.criadoEm||"").slice(0,10); for(const h of (l.historico||[])) if(h.data>d) d = h.data; for(const n of (l.notas||[])) if(n.data>d) d = n.data; return d; };
   const hojeT = today();
-  const parados = leads.filter(l=>l.responsavel && ["novo","informado","negociando"].includes(l.etapa)).map(l=>({l, u:ultimaAcao(l)})).filter(x=>x.u && diff(hojeT, x.u)>=15).sort((a,b)=>a.u.localeCompare(b.u));
+  const parados = leads.filter(l=>l.responsavel && ["novo","informado","negociando","linkenviado"].includes(l.etapa)).map(l=>({l, u:ultimaAcao(l)})).filter(x=>x.u && diff(hojeT, x.u)>=15).sort((a,b)=>a.u.localeCompare(b.u));
   const porVend = {}; for(const x of parados) porVend[x.l.responsavel] = (porVend[x.l.responsavel]||0)+1;
   const paradosHTML = !podeGerir() ? "" : `<section class="panel">
       <h3 class="sec">Leads parados · ${parados.length}</h3>
@@ -1464,7 +1609,7 @@ function renderNumeros(){
     </section>
     <section class="panel">
       <h3 class="sec">Funil do período</h3>
-      ${(()=>{ const respondeu = l => ["negociando","informado","matriculado","agendado"].includes(l.etapa) || !!l.resumoEm || (l.historico||[]).some(h=>/respondeu|Em atendimento|Em conversa/.test(h.acao));
+      ${(()=>{ const respondeu = l => ["negociando","informado","linkenviado","matriculado","agendado"].includes(l.etapa) || !!l.resumoEm || (l.historico||[]).some(h=>/respondeu|Em atendimento|Em conversa/.test(h.acao));
         const quem = [...equipe, "Sem vendedora"];
         const lin = quem.map(n=>{ const ls = novos.filter(l=>(l.responsavel||"Sem vendedora")===n); const r = ls.filter(respondeu).length, m = ls.filter(l=>l.etapa==="matriculado").length; return {n, e:ls.length, r, m}; }).filter(x=>x.e);
         const T = lin.reduce((a,x)=>({e:a.e+x.e, r:a.r+x.r, m:a.m+x.m}), {e:0,r:0,m:0});
@@ -1560,8 +1705,13 @@ function renderConfig(force){
       <p class="tplhelp">Um curso por linha. É a lista que aparece para as meninas escolherem no cadastro.</p>
       <label class="f">Cursos<textarea id="cursosTxt" rows="8">${esc(CURSOS.join("\n"))}</textarea></label>
       <div class="row"><button class="btn primary" type="button" id="saveCursos">Salvar cursos</button><button class="btn ghost" type="button" id="resetCursos">Voltar à lista padrão</button></div>
-      ${Object.keys(foraLista).length ? `<p class="tplhelp" style="color:var(--ink);font-weight:600">Cursos digitados fora da lista</p><p class="tplhelp">Escolha o curso certo e clique em Corrigir: todos os leads com aquele texto são atualizados.</p>` +
-        Object.entries(foraLista).sort((a,b)=>b[1]-a[1]).map(([c,n],i)=>`<div class="row"><span style="min-width:10rem">"${esc(c)}" · ${n} lead(s)</span><select id="mapc-${i}" data-de="${esc(c)}" style="width:auto"><option value="">Corrigir para…</option>${CURSOS.map(x=>`<option>${esc(x)}</option>`).join("")}</select><button class="btn" type="button" data-mapc="${i}">Corrigir</button></div>`).join("") : ""}
+      ${Object.keys(foraLista).length ? `<p class="tplhelp" style="color:var(--ink);font-weight:600">Cursos digitados fora da lista</p>
+        <p class="tplhelp">O sistema já sugere o curso certo. Quando a pessoa está entre dois cursos, ele preenche também o 2º curso. Textos como "não sei" viram <b>Não sei ainda</b>. Confira e clique em Corrigir: todos os leads com aquele texto são atualizados.</p>` +
+        Object.entries(foraLista).sort((a,b)=>b[1]-a[1]).map(([c,n],i)=>{ const sg = sugerirCursos(c);
+          return `<div class="row" style="flex-wrap:wrap"><span style="min-width:10rem">"${esc(c)}" · ${n} lead(s)</span>
+          <select id="mapc-${i}" data-de="${esc(c)}" style="width:auto"><option value="">Corrigir para…</option><option value="__nao"${sg[0]==="__nao"?" selected":""}>Não sei ainda</option>${CURSOS.map(x=>`<option${x===sg[0]?" selected":""}>${esc(x)}</option>`).join("")}</select>
+          <select id="mapc2-${i}" style="width:auto"><option value="">2º curso (se estiver entre dois)</option>${CURSOS.map(x=>`<option${x===sg[1]?" selected":""}>${esc(x)}</option>`).join("")}</select>
+          <button class="btn" type="button" data-mapc="${i}">Corrigir</button></div>`; }).join("") : ""}
     </section>
     <section class="panel">
       <h3 class="sec">Lixeira · ${lx.length}</h3>
@@ -1582,6 +1732,11 @@ function renderConfig(force){
       <p class="tplhelp">Em branco vale a meta mínima de ${META_PADRAO}. Dá para deixar os próximos 2 meses prontos.</p>
       <div class="grid2">${equipe.map((n,i)=>`<label class="f">${esc(n)}<input type="number" min="1" id="meta-${i}" data-meta="${esc(n)}" value="${esc((metas[metaMesCfg()]||{})[n] ?? "")}" placeholder="${META_PADRAO}"></label>`).join("")}</div>
       <div class="row"><button class="btn primary" type="button" id="saveMetas">Salvar metas</button></div>
+      <p class="tplhelp" style="color:var(--ink);font-weight:600;margin-top:12px">Meta diária de atividade (vale para todas, todos os dias)</p>
+      <div class="grid2"><label class="f">Mensagens enviadas<input type="number" min="0" id="atMsgs" value="${metaAtiv().msgs}"></label>
+        <label class="f">Conversas registradas<input type="number" min="0" id="atConv" value="${metaAtiv().conv}"></label>
+        <label class="f">Links de matrícula enviados<input type="number" min="0" id="atLinks" value="${metaAtiv().links}"></label></div>
+      <div class="row"><button class="btn" type="button" id="saveAtiv">Salvar meta diária</button></div>
     </section>
     <section class="panel">
       <h3 class="sec">Mensagens</h3>
@@ -1596,6 +1751,12 @@ function renderConfig(force){
       <div class="grid2"><label class="f">Início da próxima turma<input type="date" id="pzTurma" value="${esc(prazos.inicioTurma||"")}"></label>
       <label class="f">Condição de matrícula vale até<input type="date" id="pzCond" value="${esc(prazos.prazoCondicao||"")}"></label></div>
       <div class="row"><button class="btn primary" type="button" id="savePrazos">Salvar datas</button></div>
+      <p class="tplhelp" style="color:var(--ink);font-weight:600;margin-top:12px">Prazo da condição especial da taxa de adesão</p>
+      <div class="grid2"><label class="f">Prazo<select id="ptModo">${[["24h","1 dia (até amanhã)"],["48h","2 dias"],["sexta","Até sexta-feira"],["data","Data fixa"]].map(([k,t])=>`<option value="${k}"${(prazoTaxaCfg.modo||"48h")===k?" selected":""}>${t}</option>`).join("")}</select></label>
+        <label class="f">Data fixa (se escolher "Data fixa")<input type="date" id="ptData" value="${esc(prazoTaxaCfg.data||"")}"></label></div>
+      <label class="row" style="font-size:.9rem"><input type="checkbox" id="ptReal"${prazoTaxaCfg.usarReal!==false?" checked":""}> Usar a data real da campanha quando vier antes (ex.: 05/11, fecha a turma de novembro; 30/11, fim da Black)</label>
+      <p class="note">Hoje a mensagem diria: <b>${esc(prazoTaxa().texto)}</b></p>
+      <div class="row"><button class="btn" type="button" id="savePrazoTaxa">Salvar prazo</button></div>
     </section>
     <section class="panel">
       <h3 class="sec">Rematrícula</h3>
@@ -1710,9 +1871,10 @@ document.getElementById("config").addEventListener("click", async e=>{
     try{ await db.collection("leads").doc(ap.dataset.apaga).delete(); toast("Apagado de vez"); }catch(err){ fail(); } return; }
   if(jn){ const g = gruposDuplicados()[Number(jn.dataset.juntar)]; if(!g) return; jn.disabled = true; jn.textContent = "Juntando…";
     if(await juntarLeads(g)) toast("Leads juntados"); renderConfig(true); return; }
-  if(mc){ const sel = document.getElementById("mapc-"+mc.dataset.mapc); const de = sel.dataset.de, para = sel.value; if(!para){ toast("Escolha o curso certo"); return; }
-    mc.disabled = true; let n = 0; for(const l of leads.filter(x=>String(x.curso||"").trim()===de)){ try{ await db.collection("leads").doc(l.id).update({curso:para}); n++; }catch(err){ break; } }
-    toast(`${n} lead(s) corrigidos para ${para}`); renderConfig(true); return; }
+  if(mc){ const sel = document.getElementById("mapc-"+mc.dataset.mapc); const de = sel.dataset.de, para0 = sel.value; if(!para0){ toast("Escolha o curso certo"); return; }
+    const para = para0==="__nao" ? "" : para0; const s2 = document.getElementById("mapc2-"+mc.dataset.mapc).value; const para2 = para && s2 && s2!==para ? s2 : null;
+    mc.disabled = true; let n = 0; for(const l of leads.filter(x=>String(x.curso||"").trim()===de)){ try{ await db.collection("leads").doc(l.id).update({curso:para, curso2:para2}); n++; }catch(err){ break; } }
+    toast(`${n} lead(s) corrigidos para ${para ? para + (para2 ? " ou " + para2 : "") : "Não sei ainda"}`); renderConfig(true); return; }
   if(id==="resetCursos"){ document.getElementById("cursosTxt").value = CURSOS_PADRAO.join("\n"); toast("Lista padrão carregada. Clique em Salvar cursos para confirmar."); return; }
   if(id==="saveCursos"){ const lista = [...new Set(document.getElementById("cursosTxt").value.split("\n").map(x=>x.trim()).filter(Boolean))];
     if(!lista.length){ toast("Informe pelo menos um curso"); return; }
@@ -1738,6 +1900,8 @@ document.getElementById("config").addEventListener("click", async e=>{
     }
     importing = false; impParsed = {feito:n}; impText = ""; renderConfig(true); toast(`${n} lead(s) importado(s)`);
   }
+  if(id==="saveAtiv"){ const v = {msgs:Number(document.getElementById("atMsgs").value)||0, conv:Number(document.getElementById("atConv").value)||0, links:Number(document.getElementById("atLinks").value)||0};
+    try{ await db.doc("config/metas").set({...metas, _atividade:v}); toast("Meta diária salva"); }catch(err){ fail(); } return; }
   if(id==="saveMetas"){
     const v = {}; document.querySelectorAll("[data-meta]").forEach(x=>{ const n = Number(x.value); if(n>0) v[x.dataset.meta] = n; });
     const k = metaMesCfg(); try{ await db.doc("config/metas").set({...metas, [k]: v}); toast(`Metas de ${nomeMes(k)} salvas`); }catch(err){ fail(); }
@@ -1747,6 +1911,9 @@ document.getElementById("config").addEventListener("click", async e=>{
     try{ await db.doc("config/mensagens").set(t); toast("Mensagens salvas"); }catch(err){ fail(); }
   }
   if(id==="resetTpl") document.querySelectorAll("[data-tpl]").forEach(x=>x.value=DEFAULT_TPL[x.dataset.tpl]);
+  if(id==="savePrazoTaxa"){ const v = {modo:document.getElementById("ptModo").value, data:document.getElementById("ptData").value||"", usarReal:document.getElementById("ptReal").checked};
+    if(v.modo==="data" && (!v.data || v.data<today())){ toast("Escolha uma data de hoje em diante"); return; }
+    try{ await db.doc("config/calendario").set({prazoTaxa:v}, {merge:true}); prazoTaxaCfg = v; toast(`Prazo salvo: ${prazoTaxa().texto}`); renderConfig(true); }catch(err){ fail(); } return; }
   if(id==="savePrazos"){
     const pz = {inicioTurma: document.getElementById("pzTurma").value || null, prazoCondicao: document.getElementById("pzCond").value || null};
     try{ await db.doc("config/calendario").set({prazos:pz}, {merge:true}); toast("Datas salvas. As mensagens com prazo já usam essas datas."); }catch(err){ fail(); }
@@ -1776,8 +1943,36 @@ function campLista(){
     .sort((a,b)=>(campFeita(a)?1:0)-(campFeita(b)?1:0) || String(a.nome).localeCompare(b.nome));
 }
 const campFeita = l => (l.campanhas||[]).some(c=>c.nome===campLabel());
-function campText(l){ return trocaNome(variacao(campMsg, l), l.nome).replaceAll("{ofertaBF}", ofertaBF(l.curso, l.modalidade)).replaceAll("{curso}", l.curso || "graduação").replaceAll("{responsavel}", firstName(l.responsavel || meuNome()) || "equipe"); }
+function campText(l){ return trocaNome(variacao(campMsg, l), l.nome).replaceAll("{ofertaBF}", ofertaBF2(l)).replaceAll("{turmasBF}", turmasBF()).replaceAll("{curso}", cursoTxt(l) || "graduação").replaceAll("{responsavel}", firstName(l.responsavel || meuNome()) || "equipe"); }
+// Reativação da base para a Black: coloca de volta na fila quem está na Lista fria ou sem contato marcado até 30/11.
+const bfReativaveis = () => leads.filter(l => !["matriculado","naoquer","semmedio","agendado"].includes(l.etapa) && l.bfPasso==null && !l.bfFeito &&
+  (["frio","perdido"].includes(l.etapa) || !l.proximo || l.proximo > BF_FIM));
+async function bfReativar(btn){
+  const alvo = bfReativaveis().sort((a,b)=>String(b.perdidoEm||b.ultimoEnvio||b.criadoEm||"").localeCompare(String(a.perdidoEm||a.ultimoEnvio||a.criadoEm||"")));
+  const t = today(), porDia = 40, k = {}, pend = [];
+  for(const l of alvo){
+    let dona = donaDe(l); const d = {bfPasso:0};
+    if(!dona || !equipe.includes(dona)){ dona = proximaVendedora("", []) || equipe[0]; if(l.responsavel) d.responsavel = dona; else d.filaDe = dona; }
+    const i = k[dona] = (k[dona]||0) + 1;
+    let ini = t; for(let j=0; j<Math.floor((i-1)/porDia); j++) ini = semDomingo(addDays(ini,1));
+    d.proximo = minDate(diaLivre(dona, ini, l.id), addDays(BF_FIM,-1));
+    d.historico = [...(l.historico||[]), {data:t, em:new Date().toISOString(), acao:"reativado para a Black Friday", por:quemSou()}].slice(-20);
+    pend.push([l, d]); l.proximo = d.proximo; if(d.responsavel) l.responsavel = d.responsavel; if(d.filaDe) l.filaDe = d.filaDe;
+  }
+  btn.disabled = true; let n = 0;
+  try{ for(let x=0; x<pend.length; x+=400){ const parte = pend.slice(x, x+400);
+      if(db.batch){ const b = db.batch(); for(const [l,d] of parte) b.update(db.collection("leads").doc(l.id), d); await b.commit(); }
+      else for(const [l,d] of parte) await db.collection("leads").doc(l.id).update(d);
+      for(const [l,d] of parte) Object.assign(l, d); n += parte.length; btn.textContent = `Reativando… ${n} de ${pend.length}`; } }
+  catch(e){ toast("Parou no meio. Clique de novo para terminar."); btn.disabled = false; return; }
+  const ult = pend.reduce((a,[,d])=>maxDate(a, d.proximo), t);
+  toast(`${n} lead(s) de volta na fila até ${br(ult)}, no máximo ${porDia} por vendedora por dia, com a mensagem da Black`); renderCampList();
+}
 function renderCampList(){
+  { const b = document.getElementById("bfReativar"), inf = document.getElementById("bfInfo"); const ok = podeGerir() && bfAtivo() && !!db;
+    b.hidden = !ok; inf.hidden = !ok;
+    if(ok){ const q = bfReativaveis().length; if(!b.disabled) b.textContent = q ? `🔁 Reativar ${q} lead(s) na fila das vendedoras (Black Friday)` : "✅ Base já reativada para a Black";
+      b.disabled = !q && !b.dataset.rodando; inf.innerHTML = `<b>Reativar</b> coloca na fila de <b>Chamar hoje</b> quem está na Lista fria ou sem contato marcado até 30/11 (até 40 por vendedora por dia). Cada um recebe até 3 mensagens da Black: pergunta curta → preço do curso (3 dias depois) → último aviso com saída fácil (4 dias depois). Quem já está na fila recebe a mensagem da Black uma vez, no próximo contato. Matriculados, quem pediu para não ser chamado, quem não terminou o ensino médio e quem pediu para chamar depois ficam de fora.`; } }
   const ls0 = campLista(); const feitas = ls0.filter(campFeita).length; const ls = ls0.slice(0, campLimite);
   document.getElementById("campResumo").textContent = ls.length ? `${ls.length} lead(s) na lista · ${feitas} já receberam "${campLabel()}"` : "";
   document.getElementById("campList").innerHTML = !db ? emptyHTML("Conectando…","") : ls.length ? ls.map(l=>{ const f = campFeita(l); return `
@@ -1787,7 +1982,7 @@ function renderCampList(){
       <div class="acts">${!podeMexer(l) ? `<span class="note">Lead da ${esc(l.responsavel)}</span>` : `
         <a class="btn primary" href="${esc(waLink(l, campText(l)))}" target="_blank" rel="noopener">Abrir no WhatsApp</a>
         ${f?"":`<button class="btn" type="button" data-cact="enviada">Marcar enviada</button>`}
-        <button class="btn" type="button" data-cact="respondeu">Respondeu</button>`}
+        ${l.etapa==="matriculado" ? `<button class="btn" type="button" data-cact="indicou" style="border-color:var(--accent);color:var(--accent)">＋ Cadastrar indicado</button>` : `<button class="btn" type="button" data-cact="respondeu">Respondeu</button>`}`}
       </div></div>`; }).join("")
     : emptyHTML("Ninguém nesse filtro","Troque o público da campanha lá em cima.");
   if(ls0.length > ls.length) document.getElementById("campList").innerHTML += `<button class="btn" type="button" id="campMais">Mostrar mais (${ls0.length-ls.length} restantes)</button>`;
@@ -1795,7 +1990,12 @@ function renderCampList(){
 document.getElementById("campanha").addEventListener("click", async e=>{
   const wa2 = e.target.closest("a.btn.primary");
   if(wa2 && foraDeHorario()){ const k = "camp"+(e.target.closest(".crow")||{dataset:{}}).dataset.id; if(!(avisoHorario[k] && Date.now()-avisoHorario[k] < 15000)){ e.preventDefault(); avisoHorario[k] = Date.now(); toast(`Agora são ${new Date().getHours()}h. O ideal é chamar entre 8h e 21h. Toque de novo para enviar mesmo assim.`); return; } }
+  if(e.target.id==="bfReativar"){ const b = e.target; if(b.dataset.ok!=="1"){ b.dataset.ok = "1"; b.textContent = `Confirmar: reativar ${bfReativaveis().length} lead(s)`; return; } b.dataset.ok = ""; b.dataset.rodando = "1"; await bfReativar(b); b.dataset.rodando = ""; return; }
   if(e.target.id==="campMais"){ campLimite += 60; renderCampList(); return; }
+  if(e.target.id==="campIndic"){ campNome = "Indicação relâmpago Black"; campMsg = IND_MSG; campPub = "indic"; campLimite = 60;
+    try{ localStorage.setItem("campNome", campNome); localStorage.setItem("campMsg", campMsg); localStorage.setItem("campPub", campPub); }catch(err){}
+    document.getElementById("campNome").value = campNome; document.getElementById("campMsg").value = campMsg; document.getElementById("campPub").value = campPub;
+    document.getElementById("campFriaFiltros").hidden = true; renderCampList(); toast("Indicação relâmpago pronta: seus alunos matriculados"); return; }
   if(e.target.id==="campBF"){ campNome = "Black Friday 2026"; campMsg = BF_MSG; campPub = "base"; campLimite = 60;
     try{ localStorage.setItem("campNome", campNome); localStorage.setItem("campMsg", campMsg); localStorage.setItem("campPub", campPub); }catch(err){}
     document.getElementById("campNome").value = campNome; document.getElementById("campMsg").value = campMsg; document.getElementById("campPub").value = campPub;
@@ -1807,6 +2007,11 @@ document.getElementById("campanha").addEventListener("click", async e=>{
   const l = leads.find(x=>x.id===row.dataset.id); if(!l) return;
   if(act==="enviada"){ const c = [...(l.campanhas||[]), {nome:campLabel(), data:today()}].slice(-10);
     if(await patch(l.id, {campanhas:c, envios: comEnvio(l, envioDe("camp:"+campLabel(), campMsg, l))}, `campanha enviada: ${campLabel()}`)) toast("Marcado como enviado"); }
+  if(act==="indicou"){ montarCursoForm(); form.hidden = false; syncExtras();
+    document.getElementById("fInd").value = l.nome || ""; document.getElementById("fOrigem").value = "Indicação"; document.getElementById("fAcaoBox").hidden = true;
+    if(equipe.includes(meuNome())) document.getElementById("fResp").value = meuNome();
+    window.scrollTo(0,0); document.getElementById("fNome").focus(); toast(`Cadastre o indicado por ${firstName(l.nome) || "esse aluno"}`); return; }
+  if(act==="respondeu" && l.etapa==="matriculado") return;
   if(act==="respondeu"){ if(await patch(l.id, {...respostaFields(l), etapa:"negociando", tentativas:0, proximo:addDays(today(),1), temperatura:"quente"}, `respondeu à oferta ${campLabel()} → Em atendimento`)) toast("Foi para Em atendimento (🔥 quente), contato amanhã. Registre a conversa no card."); }
 });
 document.getElementById("campanha").addEventListener("input", e=>{
@@ -1825,6 +2030,14 @@ const SITE = typeof FIREBASE_CONFIG !== "undefined";
 let membros = [], userEmail = "", saindo = null, renomeando = null;
 let poolVista = "", poolFuturos = false, mostrarOcup = false, distAberto = false, distRodando = false, patchExtra = {};
 let atrasoAberto = false, atrasoRodando = false, juntandoNome = false, faltaAberta = false, faltaQuem = "";
+// Links de matrícula enviados e ainda sem pagamento: o lead mais perto da matrícula.
+function linksHTML(L, t){
+  const q = L.filter(l=>l.etapa==="linkenviado"); if(!q.length) return "";
+  const g = {}; for(const l of q){ const n = donaDe(l) || "Sem vendedora"; (g[n] = g[n] || []).push(l); }
+  const adm = podeGerir() && resp==="todas";
+  return `<div class="warn" style="flex-direction:column;align-items:flex-start;gap:4px;background:var(--today-soft)"><span><b>💳 ${q.length} link(s) de matrícula sem pagamento</b> · cada um é uma matrícula quase pronta. Volte neles hoje.</span>
+    ${adm ? Object.entries(g).sort((a,b)=>b[1].length-a[1].length).map(([n,ls])=>`<span><b>${esc(n)}:</b> ${ls.slice(0,8).map(l=>`${esc(nomeExib(l))} (enviado ${l.linkEm?br(l.linkEm):"—"})`).join(", ")}${ls.length>8?` e mais ${ls.length-8}`:""}</span>`).join("") : ""}</div>`;
+}
 // Leads quentes parados: estão perto de fechar e passaram do dia combinado.
 const quenteParado = (l, t) => l.temperatura==="quente" && ["negociando","informado"].includes(l.etapa) && l.proximo && l.proximo < t;
 function quentesHTML(L, t){
@@ -2034,7 +2247,8 @@ function retornoInfo(){
   if(fmtISO(d)!==today() || hm > INFO_FIM) return {proximo: semDomingo(addDays(today(),1)), retornoHora: INFO_INICIO};
   return {proximo: today(), retornoHora: hm};
 }
-const aguardaHora = l => l.etapa==="informado" && !!l.retornoHora && l.proximo===today() && agoraHM() < l.retornoHora;
+const RETORNO_HORA = ["informado","linkenviado"];
+const aguardaHora = l => RETORNO_HORA.includes(l.etapa) && !!l.retornoHora && l.proximo===today() && agoraHM() < l.retornoHora;
 // Contatos de uma vendedora num dia; "hoje" inclui os atrasados, que também estão na lista de hoje.
 function cargaDia(quem, x, ignorar){ const t = today(); return leads.filter(o=>o.id!==ignorar && donaDe(o)===quem && o.proximo && (x===t ? o.proximo<=t : o.proximo===x)).length; }
 function diaLivre(quem, dia, ignorar){
@@ -2079,7 +2293,7 @@ function k_nome_ruim(l){ return !temNome(l.nome); }
 function proximaVendedora(atual, excluir){
   const fora = new Set([atual, ...(excluir||[])]);
   let candidatas = equipe.filter(n=>!fora.has(n)); if(!candidatas.length) candidatas = equipe.filter(n=>n!==atual); if(!candidatas.length) return null;
-  const carga = n => leads.filter(l=>(l.responsavel===n || (!l.responsavel && l.filaDe===n)) && ["novo","negociando","agendado","semmedio","informado"].includes(l.etapa)).length;
+  const carga = n => leads.filter(l=>(l.responsavel===n || (!l.responsavel && l.filaDe===n)) && ["novo","negociando","agendado","semmedio","informado","linkenviado"].includes(l.etapa)).length;
   return candidatas.sort((a,b)=>carga(a)-carga(b))[0];
 }
 // Quem nunca respondeu: 3 mensagens por vendedora; na 3ª sem resposta, passa para a próxima (até 3 vendedoras) e depois Lista fria.
@@ -2111,9 +2325,10 @@ function envioDe(k, texto, l){
 }
 function comEnvio(l, e){ return e ? [...(l.envios||[]), e].slice(-8) : (l.envios||[]); }
 function respostaFields(l){
+  const fim = l.bfPasso!=null ? {bfPasso:null, bfFeito:true} : {};   // respondeu: sai da sequência da Black e segue o atendimento normal
   const ev = (l.envios||[]).slice(); const i = ev.length-1;
-  if(i<0 || ev[i].r || diff(today(), ev[i].d) > 30) return {};
-  ev[i] = {...ev[i], r: today()}; return {envios: ev};
+  if(i<0 || ev[i].r || diff(today(), ev[i].d) > 30) return fim;
+  ev[i] = {...ev[i], r: today()}; return {...fim, envios: ev};
 }
 async function marcarEnviado(l){
   patchExtra = isPool(l) ? {chamandoPor: meuNome() || userEmail, chamandoEm: today()} : {};
@@ -2123,6 +2338,14 @@ async function marcarEnviado(l){
 }
 async function marcarEnviado_(l){
   const t = today(); const s = STAGES[l.etapa] || {};
+  const bk = bfKey(l);
+  if(bk && l.bfPasso!=null){   // lead reativado para a Black: bf_1 -> +3 dias -> bf_2 -> +4 dias -> bf_3 -> fim
+    const n = l.bfPasso + 1;
+    if(n < 3){ const alvo = minDate(addDays(t, n===1 ? 3 : 4), addDays(BF_FIM, -1)); await patch(l.id, {bfPasso:n, proximo: maxDate(alvo, addDays(t,1)), ultimoEnvio:t}, `Black Friday: mensagem ${n} de 3 enviada`, {espalhar:true}); toast(`Enviado. Próxima mensagem da Black em ${n===1?3:4} dias`); }
+    else { await patch(l.id, {bfPasso:3, proximo:null, ultimoEnvio:t}, "Black Friday: 3 mensagens sem resposta"); toast("Enviado. Foram as 3 mensagens da Black para esse lead"); }
+    return;
+  }
+  if(bk) patchExtra.bfFeito = true;
   if(l.etapa==="matriculado"){
     const feitos = [...(l.posFeitos||[])]; if(l.posAtual && !feitos.includes(l.posAtual)) feitos.push(l.posAtual);
     const nx = nextPos({...l, posFeitos:feitos});
@@ -2140,6 +2363,12 @@ async function marcarEnviado_(l){
     toast(`Enviado. Se não responder, volta em ${RETRY_DIAS} dias`); return;
   }
   if(l.etapa==="novo"){ await enviarRodizio(l, t); return; }
+  if(l.etapa==="linkenviado"){   // falta pagar: volta amanhã, amanhã, depois 2 dias; na 4ª sem resposta volta para Em atendimento
+    const n = (l.tentativas||0)+1;
+    if(n >= 4){ await patch(l.id, {etapa:"negociando", tentativas:1, temperatura:"morno", proximo:addDays(t,2), retornoHora:null, ultimoEnvio:t}, "link sem pagamento depois de 4 retornos → Em atendimento", {espalhar:true}); toast("Enviado. Sem pagamento depois de 4 retornos: voltou para Em atendimento"); return; }
+    const prox = n<=2 ? 1 : 2;
+    await patch(l.id, {tentativas:n, proximo:semDomingo(addDays(t,prox)), retornoHora:null, ultimoEnvio:t}, `💳 retorno do link enviado (${n} de 3)`); toast(`Enviado. Volta em ${prox} dia${prox>1?"s":""} para ver se pagou`); return;
+  }
   if(l.etapa==="informado"){
     await patch(l.id, {etapa:"negociando", tentativas:1, proximo:semDomingo(addDays(t,1)), retornoHora:null, ultimoEnvio:t}, `retorno das informações enviado (tentativa 1 de ${MAX_TENT})`, {espalhar:true});
     toast("Enviado. Se não responder, volta amanhã"); return;
@@ -2263,6 +2492,7 @@ list.addEventListener("click", async e=>{
     return;
   }
   if(act==="risco"){ if(await patch(id, {risco:true, riscoAvisado:null, riscoRevisado:true}, "marcado em risco para a Permanência")) toast("Aluno marcado em risco. A Permanência vê no topo da lista dela"); return; }
+  if(act==="link"){ const r = retornoInfo(); if(await patch(id, {etapa:"linkenviado", ...r, linkEm:today(), tentativas:0, temperatura:"quente"}, `💳 link da matrícula enviado · voltar ${r.proximo===today() ? "hoje" : "amanhã"} às ${r.retornoHora}`)) toast(`💳 Link registrado. Volta ${r.proximo===today() ? "hoje" : "amanhã"} às ${r.retornoHora} para ver se pagou`); return; }
   if(act==="infos"){ const r = retornoInfo(); if(await patch(id, {etapa:"informado", ...r, infoEm:today()}, `informações enviadas · voltar ${r.proximo===today() ? "hoje" : "amanhã"} às ${r.retornoHora}`)) toast(`Combinado: volta ${r.proximo===today() ? "hoje" : "amanhã"} às ${r.retornoHora}`); return; }
   if(act==="ctx"){ pendingCtxOnly.add(id); pendingStage.set(id, "negociando"); render(); return; }
   if(act==="nota"){ pendingNota.add(id); render(); setTimeout(()=>{ const t = document.getElementById(`nota-${id}`); if(t) t.focus(); },0); return; }
@@ -2307,7 +2537,7 @@ list.addEventListener("click", async e=>{
     const ori0 = ind && !g("origem").value ? "Indicação" : g("origem").value, acao0 = g("acao") ? g("acao").value.trim() : "";
     if(ori0===RUA && acao0.length < 2){ toast("Escreva a empresa ou o local da ação de rua"); return; }
     if(l.etapa==="matriculado" && !ori0){ toast("Aluno matriculado precisa ter a origem"); return; }
-    const d = {modalidade: g("mod") ? (g("mod").value || null) : (l.modalidade||null), acaoRua: ori0===RUA ? acao0 : null, nome, telefone:tel, curso:lerCurso(`ed-curso-${id}`), origem: ori0, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind), antigo: g("antigo") ? g("antigo").checked : !!l.antigo};
+    const d = {modalidade: g("mod") ? (g("mod").value || null) : (l.modalidade||null), acaoRua: ori0===RUA ? acao0 : null, nome, telefone:tel, curso:lerCurso(`ed-curso-${id}`), curso2: (lerCurso(`ed-curso2-${id}`) && lerCurso(`ed-curso2-${id}`)!==lerCurso(`ed-curso-${id}`)) ? lerCurso(`ed-curso2-${id}`) : null, origem: ori0, obs:g("obs").value.trim(), indicadoPor:ind, indicadoPorId:alunoId(ind), antigo: g("antigo") ? g("antigo").checked : !!l.antigo};
     if(g("bol")){ const b = g("bol").value;
       if(!b){ toast("Informe a data do 1º boleto"); return; }
       if(l.dataMatricula && b < l.dataMatricula){ toast("O 1º boleto não pode vencer antes da matrícula"); return; }
@@ -2429,7 +2659,7 @@ document.getElementById("fInd").addEventListener("input", e=>{ if(e.target.value
 document.getElementById("fTel").addEventListener("input", e=>{ dupOk = false; const w = document.getElementById("dupWarn"); const dp = findDup(e.target.value);
   if(dp){ w.hidden = false; w.innerHTML = `<span>${esc(dupTxt(dp))}</span>`; } else w.hidden = true; });
 document.getElementById("dupWarn").addEventListener("click", e=>{ if(e.target.id==="dupSave"){ dupOk = true; form.requestSubmit(); } });
-function montarCursoForm(){ const b = document.getElementById("fCursoBox"); if(b) b.innerHTML = cursoSel("fCurso", ""); }
+function montarCursoForm(){ const b = document.getElementById("fCursoBox"); if(b) b.innerHTML = cursoSel("fCurso", ""); const b2 = document.getElementById("fCurso2Box"); if(b2) b2.innerHTML = cursoSel("fCurso2", ""); }
 document.getElementById("btnNovo").addEventListener("click", ()=>{ montarCursoForm(); form.hidden = !form.hidden; if(!form.hidden){ syncExtras(); document.getElementById("fNome").focus(); } });
 document.getElementById("btnCancelar").addEventListener("click", ()=>{ form.reset(); form.hidden = true; dupOk = false; document.getElementById("dupWarn").hidden = true; });
 form.addEventListener("submit", async e=>{
@@ -2446,7 +2676,7 @@ form.addEventListener("submit", async e=>{
   if(st==="matriculado" && !origem){ toast("Escolha a origem da matrícula (ex.: Ação de rua, Instagram)"); return; }
   const base = {acaoRua: acaoRua || null, modalidade: document.getElementById("fMod").value || null,
     nome: document.getElementById("fNome").value.trim(), telefone: tel,
-    curso: lerCurso("fCurso"), responsavel: document.getElementById("fResp").value,
+    curso: lerCurso("fCurso"), curso2: (lerCurso("fCurso2") && lerCurso("fCurso2")!==lerCurso("fCurso")) ? lerCurso("fCurso2") : null, responsavel: document.getElementById("fResp").value,
     origem, obs: document.getElementById("fObs").value.trim(), criadoEm: new Date().toISOString(), ultimoEnvio: null,
     indicadoPor: document.getElementById("fInd").value.trim(), indicadoPorId: alunoId(document.getElementById("fInd").value.trim()),
     antigo: document.getElementById("fAntigo").checked, cicloInicio: today(), ciclos: 1
@@ -2566,7 +2796,7 @@ auth.onAuthStateChanged(u=>{
   unsubs.push(db.doc("config/recados").onSnapshot(s=>{ recados = s.exists && Array.isArray(s.data().itens) ? s.data().itens : []; renderSnap(); }, ()=>{}));
   unsubs.push(db.collection("lidos").onSnapshot(s=>{ lidos = {}; s.docs.forEach(x=>{ lidos[x.id] = x.data(); }); renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/metas").onSnapshot(s=>{ metas = s.exists ? {...s.data()} : {}; renderSnap(); }, ()=>{}));
-  unsubs.push(db.doc("config/calendario").onSnapshot(s=>{ const r = s.exists && s.data().rematricula; rematJanelas = Array.isArray(r) ? r : []; prazos = (s.exists && s.data().prazos) || {}; renderSnap(); }, ()=>{}));
+  unsubs.push(db.doc("config/calendario").onSnapshot(s=>{ const r = s.exists && s.data().rematricula; rematJanelas = Array.isArray(r) ? r : []; prazos = (s.exists && s.data().prazos) || {}; prazoTaxaCfg = {modo:"48h", data:"", usarReal:true, ...((s.exists && s.data().prazoTaxa) || {})}; renderSnap(); }, ()=>{}));
   unsubs.push(db.doc("config/equipe").onSnapshot(s=>{ if(s.exists) aplicarEquipe(s.data()); }, ()=>{}));
   renderChips(); render();
 });
