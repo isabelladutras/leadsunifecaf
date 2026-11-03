@@ -1042,6 +1042,9 @@ function render(){
   }
 }
 
+let metaMesSel = "";
+const metaMesCfg = () => metaMesSel || mesKey();
+document.addEventListener("change", e=>{ if(e.target.id==="metaMesSel"){ metaMesSel = e.target.value; e.target.blur(); renderConfig(true); } });
 /* ---------- ações de rua ---------- */
 let acoes = [];
 function atualizarLocais(){ const dl = document.getElementById("locaisRua"); if(!dl) return;
@@ -1574,9 +1577,10 @@ function renderConfig(force){
       <div id="impResult">${impResultHTML()}</div>
     </section>
     <section class="panel">
-      <h3 class="sec">Metas de matrícula · ${mesNome()}</h3>
-      <p class="tplhelp">Em branco vale a meta mínima de ${META_PADRAO}. Preencha só quem tiver meta diferente neste mês.</p>
-      <div class="grid2">${equipe.map((n,i)=>`<label class="f">${esc(n)}<input type="number" min="1" id="meta-${i}" data-meta="${esc(n)}" value="${esc(mm[n] ?? "")}" placeholder="${META_PADRAO}"></label>`).join("")}</div>
+      <h3 class="sec">Metas de matrícula</h3>
+      <label class="f">Mês<select id="metaMesSel">${[0,1,2].map(i=>{ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+i); const k = fmtISO(d).slice(0,7); return `<option value="${k}"${k===metaMesCfg()?" selected":""}>${esc(nomeMes(k))}</option>`; }).join("")}</select></label>
+      <p class="tplhelp">Em branco vale a meta mínima de ${META_PADRAO}. Dá para deixar os próximos 2 meses prontos.</p>
+      <div class="grid2">${equipe.map((n,i)=>`<label class="f">${esc(n)}<input type="number" min="1" id="meta-${i}" data-meta="${esc(n)}" value="${esc((metas[metaMesCfg()]||{})[n] ?? "")}" placeholder="${META_PADRAO}"></label>`).join("")}</div>
       <div class="row"><button class="btn primary" type="button" id="saveMetas">Salvar metas</button></div>
     </section>
     <section class="panel">
@@ -1736,7 +1740,7 @@ document.getElementById("config").addEventListener("click", async e=>{
   }
   if(id==="saveMetas"){
     const v = {}; document.querySelectorAll("[data-meta]").forEach(x=>{ const n = Number(x.value); if(n>0) v[x.dataset.meta] = n; });
-    try{ await db.doc("config/metas").set({...metas, [mesKey()]: v}); toast("Metas salvas"); }catch(err){ fail(); }
+    const k = metaMesCfg(); try{ await db.doc("config/metas").set({...metas, [k]: v}); toast(`Metas de ${nomeMes(k)} salvas`); }catch(err){ fail(); }
   }
   if(id==="saveTpl"){
     const t = {}; document.querySelectorAll("[data-tpl]").forEach(x=>t[x.dataset.tpl]=x.value.trim());
